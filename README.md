@@ -1,14 +1,14 @@
-# SF Giants Ticket Manager
+# GTM — Giants Ticket Manager
 
 A Rust-based application for managing SF Giants season tickets and monitoring the team schedule.
 
 ## Components
 
-- **giants-server** — Axum HTTP server that serves the API and React SPA
-- **giants-cli** — Command-line tool for managing tickets and scraping schedules
-- **giants-db** — Database layer (SQLite for dev, PostgreSQL for prod)
-- **giants-models** — Shared domain models
-- **giants-scraper** — MLB Stats API schedule fetcher
+- **gtm-server** — Axum HTTP server that serves the API and React SPA
+- **gtm-cli** — Command-line tool for managing tickets and scraping schedules
+- **gtm-db** — Database layer (SQLite for dev, PostgreSQL for prod)
+- **gtm-models** — Shared domain models
+- **gtm-scraper** — MLB Stats API schedule fetcher
 - **frontend/** — React SPA (Vite + TypeScript + TailwindCSS)
 
 ## Development
@@ -26,10 +26,10 @@ A Rust-based application for managing SF Giants season tickets and monitoring th
 cd frontend && npm install && npm run build && cd ..
 
 # Run the server
-cargo run --bin giants-server
+cargo run --bin gtm-server
 
 # Use the CLI
-cargo run --bin giants-cli -- hello
+cargo run --bin gtm-cli -- hello
 ```
 
 The server listens on `http://localhost:3000`.

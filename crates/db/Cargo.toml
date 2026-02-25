@@ -1,9 +1,9 @@
 [package]
-name = "giants-db"
+name = "gtm-db"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-giants-models = { path = "../models" }
+gtm-models = { path = "../models" }
 serde = { workspace = true }
 anyhow = { workspace = true }

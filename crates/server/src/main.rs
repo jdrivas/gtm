@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         .fallback_service(ServeDir::new("frontend/dist"));
 
     let addr = "0.0.0.0:3000";
-    println!("🏟️  Giants Ticket Manager listening on http://{addr}");
+    println!("🏟️  GTM listening on http://{addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

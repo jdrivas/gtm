@@ -1,4 +1,4 @@
-# SF Giants Ticket Manager — Project Plan
+# GTM — Giants Ticket Manager — Project Plan
 
 ## Overview
 
@@ -7,7 +7,7 @@ A Rust-based application for managing SF Giants season tickets and monitoring th
 ## Project Structure
 
 ```
-windsurf-project/
+gtm/
 ├── Cargo.toml                  # Workspace root
 ├── .gitignore
 ├── README.md
@@ -68,10 +68,10 @@ Team ID `137` = San Francisco Giants.
 ## CLI Commands
 
 ```
-giants-cli scrape-schedule          # Fetch & populate games from MLB Stats API
-giants-cli list-games [--month X]   # Print upcoming games
-giants-cli list-tickets             # Print ticket inventory
-giants-cli add-ticket ...           # Add a ticket interactively or via flags
+gtm scrape-schedule          # Fetch & populate games from MLB Stats API
+gtm list-games [--month X]   # Print upcoming games
+gtm list-tickets             # Print ticket inventory
+gtm add-ticket ...           # Add a ticket interactively or via flags
 ```
 
 ---
@@ -80,11 +80,11 @@ giants-cli add-ticket ...           # Add a ticket interactively or via flags
 
 ### Phase 1 — Scaffolding & Hello World
 - [x] Initialize Cargo workspace with all crates (server, cli, db, models, scraper)
-- [ ] Set up Axum server returning "Hello, Giants!" on `/api/health`
-- [ ] Set up CLI with Clap, `--version`, and a placeholder subcommand
-- [ ] Set up React frontend with Vite + TypeScript + TailwindCSS, display "Hello, Giants!"
-- [ ] Configure server to serve the built SPA static files
-- [ ] Initialize git, `.gitignore`, create GitHub repo, push via SSH
+- [x] Set up Axum server returning "Hello, Giants!" on `/api/health`
+- [x] Set up CLI with Clap, `--version`, and a placeholder subcommand
+- [x] Set up React frontend with Vite + TypeScript + TailwindCSS, display "Hello, Giants!"
+- [x] Configure server to serve the built SPA static files
+- [x] Initialize git, `.gitignore`, create GitHub repo, push via SSH
 
 ### Phase 2a — Database Infrastructure & Game Schema
 - [ ] Add SQLx with SQLite feature to `crates/db`

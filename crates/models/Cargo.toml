@@ -1,5 +1,5 @@
 [package]
-name = "giants-models"
+name = "gtm-models"
 version.workspace = true
 edition.workspace = true
 

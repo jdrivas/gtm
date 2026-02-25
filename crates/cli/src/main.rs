@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "giants-cli")]
+#[command(name = "gtm")]
 #[command(about = "SF Giants Ticket Manager CLI")]
 #[command(version)]
 struct Cli {

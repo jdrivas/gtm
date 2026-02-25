@@ -1,12 +1,12 @@
 [package]
-name = "giants-cli"
+name = "gtm-cli"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-giants-models = { path = "../models" }
-giants-db = { path = "../db" }
-giants-scraper = { path = "../scraper" }
+gtm-models = { path = "../models" }
+gtm-db = { path = "../db" }
+gtm-scraper = { path = "../scraper" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
