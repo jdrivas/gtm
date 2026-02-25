@@ -16,8 +16,7 @@ gtm/
 ├── k8s/                        # Kubernetes manifests (future)
 ├── migrations/                 # SQL migrations (shared between SQLite/Postgres)
 ├── crates/
-│   ├── server/                 # Axum HTTP server + SPA serving
-│   ├── cli/                    # Command-line tool (Clap)
+│   ├── app/                    # Unified binary: HTTP server + CLI (Axum, Clap)
 │   ├── db/                     # Database layer (SQLx — SQLite dev / Postgres prod)
 │   ├── models/                 # Shared domain models
 │   └── scraper/                # MLB Stats API schedule fetcher
@@ -67,11 +66,17 @@ Team ID `137` = San Francisco Giants.
 
 ## CLI Commands
 
+All commands are subcommands of the single `gtm` binary. Global options (`--log-level`, `--utc`) go before the subcommand.
+
 ```
+gtm serve                    # Start HTTP server (default port 3000)
+gtm serve --port 8080        # Start on custom port
 gtm scrape-schedule          # Fetch & populate games from MLB Stats API
 gtm list-games [--month X]   # Print upcoming games
 gtm list-tickets             # Print ticket inventory
 gtm add-ticket ...           # Add a ticket interactively or via flags
+gtm --log-level debug serve  # Example: debug logging with serve
+gtm --utc serve              # Example: UTC timestamps
 ```
 
 ---

@@ -4,11 +4,10 @@ A Rust-based application for managing SF Giants season tickets and monitoring th
 
 ## Components
 
-- **gtm-server** — Axum HTTP server that serves the API and React SPA
-- **gtm-cli** — Command-line tool for managing tickets and scraping schedules
-- **gtm-db** — Database layer (SQLite for dev, PostgreSQL for prod)
-- **gtm-models** — Shared domain models
-- **gtm-scraper** — MLB Stats API schedule fetcher
+- **gtm** (`crates/app`) — Unified binary: HTTP server + CLI in one executable
+- **gtm-db** (`crates/db`) — Database layer (SQLite for dev, PostgreSQL for prod)
+- **gtm-models** (`crates/models`) — Shared domain models
+- **gtm-scraper** (`crates/scraper`) — MLB Stats API schedule fetcher
 - **frontend/** — React SPA (Vite + TypeScript + TailwindCSS)
 
 ## Development
@@ -25,14 +24,18 @@ A Rust-based application for managing SF Giants season tickets and monitoring th
 # Build the frontend
 cd frontend && npm install && npm run build && cd ..
 
-# Run the server
-cargo run --bin gtm-server
+# Start the server
+cargo run --bin gtm -- serve
 
-# Use the CLI
-cargo run --bin gtm-cli -- hello
+# Start the server on a custom port with debug logging
+cargo run --bin gtm -- --log-level debug serve --port 8080
+
+# CLI commands
+cargo run --bin gtm -- hello
+cargo run --bin gtm -- --help
 ```
 
-The server listens on `http://localhost:3000`.
+The server listens on `http://localhost:3000` by default.
 
 ### API
 

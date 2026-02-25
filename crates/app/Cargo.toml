@@ -1,5 +1,5 @@
 [package]
-name = "gtm-cli"
+name = "gtm"
 version.workspace = true
 edition.workspace = true
 
@@ -11,4 +11,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "time"] }
 clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+time = { version = "0.3", features = ["macros", "formatting"] }
