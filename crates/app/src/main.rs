@@ -1,7 +1,9 @@
-use axum::{Router, routing::get, Json};
+use axum::{Router, extract::{Path, Query, State}, routing::get, Json};
 use chrono::Local;
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::Deserialize;
 use serde_json::json;
+use sqlx::SqlitePool;
 use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -49,6 +51,10 @@ struct Cli {
     /// Display log timestamps in UTC (default: local time)
     #[arg(long, global = true)]
     utc: bool,
+
+    /// Database URL
+    #[arg(long, default_value = "sqlite:gtm.db", global = true)]
+    db_url: String,
 
     #[command(subcommand)]
     command: Commands,
@@ -118,14 +124,44 @@ async fn health() -> Json<serde_json::Value> {
     }))
 }
 
-async fn run_server(port: u16) -> anyhow::Result<()> {
+#[derive(Deserialize)]
+struct GamesQuery {
+    month: Option<u32>,
+}
+
+async fn api_list_games(
+    State(pool): State<SqlitePool>,
+    Query(params): Query<GamesQuery>,
+) -> Result<Json<Vec<gtm_models::Game>>, (axum::http::StatusCode, String)> {
+    gtm_db::list_games(&pool, params.month)
+        .await
+        .map(Json)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn api_get_game(
+    State(pool): State<SqlitePool>,
+    Path(id): Path<i64>,
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    match gtm_db::get_game(&pool, id).await {
+        Ok(Some(game)) => Ok(Json(serde_json::to_value(game).unwrap())),
+        Ok(None) => Err((axum::http::StatusCode::NOT_FOUND, "Game not found".to_string())),
+        Err(e) => Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+async fn run_server(port: u16, pool: SqlitePool) -> anyhow::Result<()> {
     info!("GTM v{}", version_string());
 
-    let api_routes = Router::new().route("/health", get(health));
+    let api_routes = Router::new()
+        .route("/health", get(health))
+        .route("/games", get(api_list_games))
+        .route("/games/{id}", get(api_get_game));
 
     let app = Router::new()
         .nest("/api", api_routes)
-        .fallback_service(ServeDir::new("frontend/dist"));
+        .fallback_service(ServeDir::new("frontend/dist"))
+        .with_state(pool);
 
     let addr = format!("0.0.0.0:{port}");
     info!("Listening on http://{addr}");
@@ -143,9 +179,19 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     init_logging(&cli);
 
+    // Connect to DB and run migrations for commands that need it
+    let needs_db = !matches!(cli.command, Commands::Hello);
+    let pool = if needs_db {
+        let pool = gtm_db::connect(&cli.db_url).await?;
+        gtm_db::migrate(&pool).await?;
+        Some(pool)
+    } else {
+        None
+    };
+
     match cli.command {
         Commands::Serve { port } => {
-            run_server(port).await?;
+            run_server(port, pool.unwrap()).await?;
         }
         Commands::Hello => {
             println!("Hello, Giants! 🏟️");
@@ -154,9 +200,24 @@ async fn main() -> anyhow::Result<()> {
             println!("Schedule scraping not yet implemented (Phase 2b)");
         }
         Commands::ListGames { month } => {
-            match month {
-                Some(m) => println!("Listing games for month {m} (not yet implemented — Phase 2a)"),
-                None => println!("Listing all games (not yet implemented — Phase 2a)"),
+            let games = gtm_db::list_games(pool.as_ref().unwrap(), month).await?;
+            if games.is_empty() {
+                println!("No games found.");
+            } else {
+                println!("{:<5} {:<12} {:<8} {:<6} {:<25} {}", "ID", "Date", "Time", "H/A", "Opponent", "Venue");
+                println!("{}", "-".repeat(80));
+                for g in &games {
+                    println!(
+                        "{:<5} {:<12} {:<8} {:<6} {:<25} {}",
+                        g.id,
+                        g.date,
+                        g.time.as_deref().unwrap_or("TBD"),
+                        g.home_away,
+                        g.opponent,
+                        g.venue,
+                    );
+                }
+                println!("\n{} game(s) total", games.len());
             }
         }
         Commands::ListTickets => {

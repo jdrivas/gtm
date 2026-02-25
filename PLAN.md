@@ -92,11 +92,11 @@ gtm --utc serve              # Example: UTC timestamps
 - [x] Initialize git, `.gitignore`, create GitHub repo, push via SSH
 
 ### Phase 2a — Database Infrastructure & Game Schema
-- [ ] Add SQLx with SQLite feature to `crates/db`
-- [ ] Create migration for `games` table
-- [ ] Implement `db` crate: connection pool, run migrations, CRUD for games
-- [ ] Wire up `/api/games` and `/api/games/:id` endpoints in server
-- [ ] Add `list-games` CLI subcommand
+- [x] Add SQLx with SQLite feature to `crates/db`
+- [x] Create migration for `games` table
+- [x] Implement `db` crate: connection pool, run migrations, CRUD for games
+- [x] Wire up `/api/games` and `/api/games/:id` endpoints in server
+- [x] Add `list-games` CLI subcommand
 
 ### Phase 2b — Populate Schedule from MLB Stats API
 - [ ] Implement `crates/scraper`: fetch schedule JSON from MLB Stats API, parse into Game models
