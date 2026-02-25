@@ -141,9 +141,9 @@ async fn api_list_games(
 
 async fn api_get_game(
     State(pool): State<SqlitePool>,
-    Path(id): Path<i64>,
+    Path(game_pk): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    match gtm_db::get_game(&pool, id).await {
+    match gtm_db::get_game(&pool, game_pk).await {
         Ok(Some(game)) => Ok(Json(serde_json::to_value(game).unwrap())),
         Ok(None) => Err((axum::http::StatusCode::NOT_FOUND, "Game not found".to_string())),
         Err(e) => Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
@@ -204,17 +204,24 @@ async fn main() -> anyhow::Result<()> {
             if games.is_empty() {
                 println!("No games found.");
             } else {
-                println!("{:<5} {:<12} {:<8} {:<6} {:<25} {}", "ID", "Date", "Time", "H/A", "Opponent", "Venue");
-                println!("{}", "-".repeat(80));
+                println!(
+                    "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {}",
+                    "GamePK", "Date", "Time", "H/A", "Opponent", "Status", "Venue"
+                );
+                println!("{}", "-".repeat(100));
                 for g in &games {
+                    let home_away = if g.home_team_name == "San Francisco Giants" { "home" } else { "away" };
+                    let opponent = if home_away == "home" { &g.away_team_name } else { &g.home_team_name };
+                    let time_display = if g.start_time_tbd { "TBD".to_string() } else { g.game_date.clone() };
                     println!(
-                        "{:<5} {:<12} {:<8} {:<6} {:<25} {}",
-                        g.id,
-                        g.date,
-                        g.time.as_deref().unwrap_or("TBD"),
-                        g.home_away,
-                        g.opponent,
-                        g.venue,
+                        "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {}",
+                        g.game_pk,
+                        g.official_date,
+                        time_display,
+                        home_away,
+                        opponent,
+                        g.status_detailed,
+                        g.venue_name,
                     );
                 }
                 println!("\n{} game(s) total", games.len());
