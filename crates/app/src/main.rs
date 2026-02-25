@@ -223,21 +223,28 @@ async fn main() -> anyhow::Result<()> {
             info!("{} games, {} promotions upserted into database", data.games.len(), data.promotions.len());
         }
         Commands::ListGames { month } => {
-            let games = gtm_db::list_games(pool.as_ref().unwrap(), month).await?;
+            let db = pool.as_ref().unwrap();
+            let games = gtm_db::list_games(db, month).await?;
             if games.is_empty() {
                 println!("No games found.");
             } else {
                 println!(
-                    "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {}",
-                    "GamePK", "Date", "Time", "H/A", "Opponent", "Status", "Venue"
+                    "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {:<20} {}",
+                    "GamePK", "Date", "Time", "H/A", "Opponent", "Status", "Venue", "Promotions"
                 );
-                println!("{}", "-".repeat(100));
+                println!("{}", "-".repeat(140));
                 for g in &games {
                     let home_away = if g.home_team_name == "San Francisco Giants" { "home" } else { "away" };
                     let opponent = if home_away == "home" { &g.away_team_name } else { &g.home_team_name };
                     let time_display = if g.start_time_tbd { "TBD".to_string() } else { g.game_date.clone() };
+                    let promos = gtm_db::get_promotions_for_game(db, g.game_pk).await?;
+                    let promo_display = if promos.is_empty() {
+                        String::new()
+                    } else {
+                        promos.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", ")
+                    };
                     println!(
-                        "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {}",
+                        "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {:<20} {}",
                         g.game_pk,
                         g.official_date,
                         time_display,
@@ -245,6 +252,7 @@ async fn main() -> anyhow::Result<()> {
                         opponent,
                         g.status_detailed,
                         g.venue_name,
+                        promo_display,
                     );
                 }
                 println!("\n{} game(s) total", games.len());
