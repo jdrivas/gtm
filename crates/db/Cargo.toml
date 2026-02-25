@@ -1,0 +1,9 @@
+[package]
+name = "giants-db"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+giants-models = { path = "../models" }
+serde = { workspace = true }
+anyhow = { workspace = true }
