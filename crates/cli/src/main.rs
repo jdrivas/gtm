@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "gtm")]
 #[command(about = "SF Giants Ticket Manager CLI")]
-#[command(version)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GTM_GIT_HASH"), ")"))]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
