@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gtm_models::Game;
+use gtm_models::{Game, Promotion};
 use serde::Deserialize;
 use tracing::info;
 
@@ -39,6 +39,25 @@ struct ApiGame {
     games_in_series: Option<i64>,
     series_game_number: Option<i64>,
     series_description: Option<String>,
+    #[serde(default)]
+    promotions: Vec<ApiPromotion>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiPromotion {
+    offer_id: i64,
+    name: String,
+    offer_type: Option<String>,
+    description: Option<String>,
+    distribution: Option<String>,
+    presented_by: Option<String>,
+    alt_page_url: Option<String>,
+    tlink: Option<String>,
+    thumbnail_url: Option<String>,
+    image_url: Option<String>,
+    #[serde(default)]
+    order: i64,
 }
 
 #[derive(Deserialize)]
@@ -114,24 +133,54 @@ impl From<ApiGame> for Game {
     }
 }
 
+fn convert_promotions(game_pk: i64, api_promos: Vec<ApiPromotion>) -> Vec<Promotion> {
+    api_promos
+        .into_iter()
+        .map(|p| Promotion {
+            offer_id: p.offer_id,
+            game_pk,
+            name: p.name,
+            offer_type: p.offer_type,
+            description: p.description,
+            distribution: p.distribution,
+            presented_by: p.presented_by,
+            alt_page_url: p.alt_page_url,
+            ticket_link: p.tlink,
+            thumbnail_url: p.thumbnail_url,
+            image_url: p.image_url,
+            display_order: p.order,
+        })
+        .collect()
+}
+
 // --- Public API ---
 
-pub async fn fetch_schedule(season: u32) -> Result<Vec<Game>> {
-    info!("Fetching {season} Giants schedule from MLB Stats API…");
+pub struct ScheduleData {
+    pub games: Vec<Game>,
+    pub promotions: Vec<Promotion>,
+}
+
+pub async fn fetch_schedule(season: u32) -> Result<ScheduleData> {
+    info!("Fetching {season} Giants schedule from MLB Stats API\u{2026}");
 
     let url = format!(
-        "{MLB_SCHEDULE_URL}?teamId={GIANTS_TEAM_ID}&season={season}&sportId=1&gameType=R"
+        "{MLB_SCHEDULE_URL}?teamId={GIANTS_TEAM_ID}&season={season}&sportId=1&gameType=R&hydrate=game(promotions)"
     );
 
     let resp: ScheduleResponse = reqwest::get(&url).await?.json().await?;
 
-    let games: Vec<Game> = resp
-        .dates
-        .into_iter()
-        .flat_map(|d| d.games)
-        .map(Game::from)
-        .collect();
+    let mut games = Vec::new();
+    let mut promotions = Vec::new();
 
-    info!("Fetched {} games for {season} season", games.len());
-    Ok(games)
+    for date_entry in resp.dates {
+        for mut api_game in date_entry.games {
+            let game_pk = api_game.game_pk;
+            let promos = std::mem::take(&mut api_game.promotions);
+            promotions.extend(convert_promotions(game_pk, promos));
+            games.push(Game::from(api_game));
+        }
+    }
+
+    info!("Fetched {} games, {} promotions for {season} season", games.len(), promotions.len());
+    Ok(ScheduleData { games, promotions })
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gtm_models::Game;
+use gtm_models::{Game, Promotion};
 use sqlx::SqlitePool;
 use tracing::info;
 
@@ -50,6 +50,53 @@ pub async fn get_game(pool: &SqlitePool, game_pk: i64) -> Result<Option<Game>> {
         .fetch_optional(pool)
         .await?;
     Ok(game)
+}
+
+pub async fn get_promotions_for_game(pool: &SqlitePool, game_pk: i64) -> Result<Vec<Promotion>> {
+    let promos = sqlx::query_as::<_, Promotion>(
+        "SELECT offer_id, game_pk, name, offer_type, description, distribution, \
+            presented_by, alt_page_url, ticket_link, thumbnail_url, image_url, display_order \
+         FROM promotions WHERE game_pk = ? ORDER BY display_order",
+    )
+    .bind(game_pk)
+    .fetch_all(pool)
+    .await?;
+    Ok(promos)
+}
+
+pub async fn upsert_promotion(pool: &SqlitePool, promo: &Promotion) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO promotions (offer_id, game_pk, name, offer_type, description, distribution, \
+            presented_by, alt_page_url, ticket_link, thumbnail_url, image_url, display_order) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+         ON CONFLICT(offer_id, game_pk) DO UPDATE SET \
+            name = excluded.name, \
+            offer_type = excluded.offer_type, \
+            description = excluded.description, \
+            distribution = excluded.distribution, \
+            presented_by = excluded.presented_by, \
+            alt_page_url = excluded.alt_page_url, \
+            ticket_link = excluded.ticket_link, \
+            thumbnail_url = excluded.thumbnail_url, \
+            image_url = excluded.image_url, \
+            display_order = excluded.display_order, \
+            updated_at = datetime('now')",
+    )
+    .bind(promo.offer_id)
+    .bind(promo.game_pk)
+    .bind(&promo.name)
+    .bind(&promo.offer_type)
+    .bind(&promo.description)
+    .bind(&promo.distribution)
+    .bind(&promo.presented_by)
+    .bind(&promo.alt_page_url)
+    .bind(&promo.ticket_link)
+    .bind(&promo.thumbnail_url)
+    .bind(&promo.image_url)
+    .bind(promo.display_order)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub async fn upsert_game(pool: &SqlitePool, game: &Game) -> Result<()> {

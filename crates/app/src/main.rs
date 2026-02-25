@@ -154,13 +154,24 @@ async fn api_get_game(
     }
 }
 
+async fn api_get_game_promotions(
+    State(pool): State<SqlitePool>,
+    Path(game_pk): Path<i64>,
+) -> Result<Json<Vec<gtm_models::Promotion>>, (axum::http::StatusCode, String)> {
+    gtm_db::get_promotions_for_game(&pool, game_pk)
+        .await
+        .map(Json)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
 async fn run_server(port: u16, pool: SqlitePool) -> anyhow::Result<()> {
     info!("GTM v{}", version_string());
 
     let api_routes = Router::new()
         .route("/health", get(health))
         .route("/games", get(api_list_games))
-        .route("/games/{id}", get(api_get_game));
+        .route("/games/{id}", get(api_get_game))
+        .route("/games/{id}/promotions", get(api_get_game_promotions));
 
     let app = Router::new()
         .nest("/api", api_routes)
@@ -201,12 +212,15 @@ async fn main() -> anyhow::Result<()> {
             println!("Hello, Giants! 🏟️");
         }
         Commands::ScrapeSchedule { season } => {
-            let games = gtm_scraper::fetch_schedule(season).await?;
+            let data = gtm_scraper::fetch_schedule(season).await?;
             let db = pool.as_ref().unwrap();
-            for game in &games {
+            for game in &data.games {
                 gtm_db::upsert_game(db, game).await?;
             }
-            info!("{} games upserted into database", games.len());
+            for promo in &data.promotions {
+                gtm_db::upsert_promotion(db, promo).await?;
+            }
+            info!("{} games, {} promotions upserted into database", data.games.len(), data.promotions.len());
         }
         Commands::ListGames { month } => {
             let games = gtm_db::list_games(pool.as_ref().unwrap(), month).await?;

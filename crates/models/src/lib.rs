@@ -34,6 +34,22 @@ pub struct Game {
     pub is_tie: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Promotion {
+    pub offer_id: i64,
+    pub game_pk: i64,
+    pub name: String,
+    pub offer_type: Option<String>,
+    pub description: Option<String>,
+    pub distribution: Option<String>,
+    pub presented_by: Option<String>,
+    pub alt_page_url: Option<String>,
+    pub ticket_link: Option<String>,
+    pub thumbnail_url: Option<String>,
+    pub image_url: Option<String>,
+    pub display_order: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ticket {
     pub id: i64,
