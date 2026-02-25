@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 function App() {
-  const [health, setHealth] = useState<{ status: string; message: string } | null>(null)
+  const [health, setHealth] = useState<{ status: string; message: string; version: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -26,6 +26,7 @@ function App() {
             <div className="space-y-1 text-left">
               <p><span className="text-gray-500">Status:</span> <span className="text-green-400">{health.status}</span></p>
               <p><span className="text-gray-500">Message:</span> {health.message}</p>
+              <p><span className="text-gray-500">Version:</span> <span className="text-gray-400">{health.version}</span></p>
             </div>
           ) : (
             !error && <p className="text-gray-500">Loading...</p>
