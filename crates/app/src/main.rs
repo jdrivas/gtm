@@ -1,5 +1,5 @@
 use axum::{Router, extract::{Path, Query, State}, routing::get, Json};
-use chrono::Local;
+use chrono::{Datelike, Local};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
 use serde_json::json;
@@ -71,7 +71,11 @@ enum Commands {
     /// Display a hello world message
     Hello,
     /// Scrape the Giants schedule from the MLB Stats API
-    ScrapeSchedule,
+    ScrapeSchedule {
+        /// Season year to fetch (default: current year)
+        #[arg(short, long, default_value_t = chrono::Local::now().year() as u32)]
+        season: u32,
+    },
     /// List upcoming games
     ListGames {
         /// Filter by month (1-12)
@@ -196,8 +200,13 @@ async fn main() -> anyhow::Result<()> {
         Commands::Hello => {
             println!("Hello, Giants! 🏟️");
         }
-        Commands::ScrapeSchedule => {
-            println!("Schedule scraping not yet implemented (Phase 2b)");
+        Commands::ScrapeSchedule { season } => {
+            let games = gtm_scraper::fetch_schedule(season).await?;
+            let db = pool.as_ref().unwrap();
+            for game in &games {
+                gtm_db::upsert_game(db, game).await?;
+            }
+            info!("{} games upserted into database", games.len());
         }
         Commands::ListGames { month } => {
             let games = gtm_db::list_games(pool.as_ref().unwrap(), month).await?;

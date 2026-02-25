@@ -99,9 +99,9 @@ gtm --utc serve              # Example: UTC timestamps
 - [x] Add `list-games` CLI subcommand
 
 ### Phase 2b — Populate Schedule from MLB Stats API
-- [ ] Implement `crates/scraper`: fetch schedule JSON from MLB Stats API, parse into Game models
-- [ ] Add `scrape-schedule` CLI subcommand that fetches and upserts games into the DB
-- [ ] Validate data and handle edge cases (postponed games, doubleheaders, TBD times)
+- [x] Implement `crates/scraper`: fetch schedule JSON from MLB Stats API, parse into Game models
+- [x] Add `scrape-schedule` CLI subcommand that fetches and upserts games into the DB
+- [x] Validate data and handle edge cases (postponed games, doubleheaders, TBD times)
 
 ### Phase 2c — Tickets & Seating
 - [ ] Create migration for `tickets` table (FK to games)
