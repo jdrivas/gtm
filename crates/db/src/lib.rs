@@ -19,7 +19,7 @@ const GAME_COLUMNS: &str = "game_pk, game_guid, game_type, season, game_date, of
     status_abstract, status_detailed, status_code, start_time_tbd, \
     away_team_id, away_team_name, away_score, away_is_winner, \
     home_team_id, home_team_name, home_score, home_is_winner, \
-    venue_id, venue_name, day_night, description, series_description, \
+    venue_id, venue_name, day_night, series_description, \
     series_game_number, games_in_series, double_header, game_number, \
     scheduled_innings, is_tie";
 
@@ -105,10 +105,10 @@ pub async fn upsert_game(pool: &SqlitePool, game: &Game) -> Result<()> {
             status_abstract, status_detailed, status_code, start_time_tbd, \
             away_team_id, away_team_name, away_score, away_is_winner, \
             home_team_id, home_team_name, home_score, home_is_winner, \
-            venue_id, venue_name, day_night, description, series_description, \
+            venue_id, venue_name, day_night, series_description, \
             series_game_number, games_in_series, double_header, game_number, \
             scheduled_innings, is_tie) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT(game_pk) DO UPDATE SET \
             game_guid = excluded.game_guid, \
             game_date = excluded.game_date, \
@@ -121,7 +121,6 @@ pub async fn upsert_game(pool: &SqlitePool, game: &Game) -> Result<()> {
             home_score = excluded.home_score, \
             home_is_winner = excluded.home_is_winner, \
             day_night = excluded.day_night, \
-            description = excluded.description, \
             is_tie = excluded.is_tie, \
             updated_at = datetime('now')",
     )
@@ -146,7 +145,6 @@ pub async fn upsert_game(pool: &SqlitePool, game: &Game) -> Result<()> {
     .bind(game.venue_id)
     .bind(&game.venue_name)
     .bind(&game.day_night)
-    .bind(&game.description)
     .bind(&game.series_description)
     .bind(game.series_game_number)
     .bind(game.games_in_series)

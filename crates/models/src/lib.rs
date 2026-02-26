@@ -24,7 +24,6 @@ pub struct Game {
     pub venue_id: i64,
     pub venue_name: String,
     pub day_night: Option<String>,
-    pub description: Option<String>,
     pub series_description: Option<String>,
     pub series_game_number: Option<i64>,
     pub games_in_series: Option<i64>,
