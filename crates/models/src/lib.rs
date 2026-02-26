@@ -49,14 +49,32 @@ pub struct Promotion {
     pub display_order: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Ticket {
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Seat {
     pub id: i64,
-    pub game_id: i64,
     pub section: String,
     pub row: String,
     pub seat: String,
-    pub cost: f64,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GameTicket {
+    pub id: i64,
+    pub game_pk: i64,
+    pub seat_id: i64,
     pub status: String,
-    pub holder_notes: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GameTicketDetail {
+    pub id: i64,
+    pub game_pk: i64,
+    pub seat_id: i64,
+    pub section: String,
+    pub row: String,
+    pub seat: String,
+    pub status: String,
+    pub notes: Option<String>,
 }

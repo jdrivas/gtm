@@ -103,14 +103,28 @@ gtm --utc serve              # Example: UTC timestamps
 - [x] Add `scrape-schedule` CLI subcommand that fetches and upserts games into the DB
 - [x] Validate data and handle edge cases (postponed games, doubleheaders, TBD times)
 
-### Phase 2c — Tickets & Seating
-- [ ] Create migration for `tickets` table (FK to games)
-- [ ] Implement ticket CRUD in `crates/db`
-- [ ] Wire up `/api/tickets` endpoints in server
-- [ ] Add `list-tickets` and `add-ticket` CLI subcommands
+### Phase 2c — Seats & Game Tickets
+- [x] Create migration for `seats` table (section/row/seat, unique constraint)
+- [x] Create migration for `game_tickets` table (FK to games + seats, unique per game+seat)
+- [x] Add `Seat`, `GameTicket`, `GameTicketDetail` models to `crates/models`
+- [x] Implement DB functions: `add_seat`, `list_seats`, `generate_tickets_for_seat`, `generate_tickets_for_all_seats`, `list_tickets_for_game`, `update_ticket_status`, `ticket_summary_for_games`
+- [x] Auto-generate `game_tickets` rows when adding a seat (one per home game)
+- [x] Hook ticket generation into `scrape-schedule` (backfill new home games × existing seats)
+- [x] Wire up API: `POST /api/seats`, `GET /api/seats`, `GET /api/games/{id}/tickets`, `PATCH /api/tickets/{id}`, `GET /api/tickets/summary`
+- [x] Add CLI: `add-seat`, `list-seats`, implement `list-tickets`
+- [x] Frontend: ticket availability badges (available/total) on home game rows in ScheduleTable
+
+### Phase 2d — Users & Ticket Allocation
+- [ ] Create migration for `users` table (name, email)
+- [ ] Add `user_id` (nullable FK) column to `game_tickets` table
+- [ ] User CRUD: DB functions, API endpoints, CLI commands
+- [ ] Ticket allocation: assign `user_id` on `game_tickets`, set status to `assigned`
+- [ ] API: `GET /api/users`, `POST /api/users`, `PATCH /api/tickets/{id}` (assign user)
+- [ ] Frontend: user picker, per-game seat selection UI, "My Games" view
 
 ### Phase 3 — Frontend Build-Out
 - [ ] Schedule view page (calendar or list)
+- [ ] Ticket detail panel in expanded game row (show individual seats + statuses)
 - [ ] Ticket inventory page
 - [ ] Add/edit ticket form
 - [ ] Connect all pages to API

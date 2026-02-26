@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gtm_models::{Game, Promotion};
+use gtm_models::{Game, GameTicketDetail, Promotion, Seat};
 use sqlx::SqlitePool;
 use tracing::info;
 
@@ -155,4 +155,120 @@ pub async fn upsert_game(pool: &SqlitePool, game: &Game) -> Result<()> {
     .execute(pool)
     .await?;
     Ok(())
+}
+
+// --- Seats ---
+
+pub async fn add_seat(pool: &SqlitePool, section: &str, row: &str, seat: &str, notes: Option<&str>) -> Result<Seat> {
+    let result = sqlx::query_as::<_, Seat>(
+        "INSERT INTO seats (section, row, seat, notes) VALUES (?, ?, ?, ?) \
+         RETURNING id, section, row, seat, notes",
+    )
+    .bind(section)
+    .bind(row)
+    .bind(seat)
+    .bind(notes)
+    .fetch_one(pool)
+    .await?;
+    Ok(result)
+}
+
+pub async fn list_seats(pool: &SqlitePool) -> Result<Vec<Seat>> {
+    let seats = sqlx::query_as::<_, Seat>(
+        "SELECT id, section, row, seat, notes FROM seats ORDER BY section, row, seat",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(seats)
+}
+
+pub async fn update_seat_group_notes(pool: &SqlitePool, section: &str, row: &str, notes: Option<&str>) -> Result<u64> {
+    let result = sqlx::query(
+        "UPDATE seats SET notes = ?, updated_at = datetime('now') WHERE section = ? AND row = ?",
+    )
+    .bind(notes)
+    .bind(section)
+    .bind(row)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn delete_seat(pool: &SqlitePool, seat_id: i64) -> Result<bool> {
+    sqlx::query("DELETE FROM game_tickets WHERE seat_id = ?")
+        .bind(seat_id)
+        .execute(pool)
+        .await?;
+    let result = sqlx::query("DELETE FROM seats WHERE id = ?")
+        .bind(seat_id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+// --- Game Tickets ---
+
+const GIANTS_TEAM_NAME: &str = "San Francisco Giants";
+
+pub async fn generate_tickets_for_seat(pool: &SqlitePool, seat_id: i64) -> Result<u64> {
+    let result = sqlx::query(
+        "INSERT OR IGNORE INTO game_tickets (game_pk, seat_id, status) \
+         SELECT game_pk, ?, 'available' FROM games WHERE home_team_name = ?",
+    )
+    .bind(seat_id)
+    .bind(GIANTS_TEAM_NAME)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn generate_tickets_for_all_seats(pool: &SqlitePool) -> Result<u64> {
+    let result = sqlx::query(
+        "INSERT OR IGNORE INTO game_tickets (game_pk, seat_id, status) \
+         SELECT g.game_pk, s.id, 'available' \
+         FROM games g CROSS JOIN seats s \
+         WHERE g.home_team_name = ?",
+    )
+    .bind(GIANTS_TEAM_NAME)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn list_tickets_for_game(pool: &SqlitePool, game_pk: i64) -> Result<Vec<GameTicketDetail>> {
+    let tickets = sqlx::query_as::<_, GameTicketDetail>(
+        "SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes \
+         FROM game_tickets gt \
+         JOIN seats s ON s.id = gt.seat_id \
+         WHERE gt.game_pk = ? \
+         ORDER BY s.section, s.row, s.seat",
+    )
+    .bind(game_pk)
+    .fetch_all(pool)
+    .await?;
+    Ok(tickets)
+}
+
+pub async fn update_ticket_status(pool: &SqlitePool, ticket_id: i64, status: &str, notes: Option<&str>) -> Result<bool> {
+    let result = sqlx::query(
+        "UPDATE game_tickets SET status = ?, notes = ?, updated_at = datetime('now') WHERE id = ?",
+    )
+    .bind(status)
+    .bind(notes)
+    .bind(ticket_id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn ticket_summary_for_games(pool: &SqlitePool) -> Result<Vec<(i64, i64, i64)>> {
+    let rows = sqlx::query_as::<_, (i64, i64, i64)>(
+        "SELECT game_pk, \
+                COUNT(*) as total, \
+                SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available \
+         FROM game_tickets GROUP BY game_pk",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
 }

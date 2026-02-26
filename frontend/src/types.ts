@@ -29,6 +29,31 @@ export interface Game {
   is_tie: boolean;
 }
 
+export interface Seat {
+  id: number;
+  section: string;
+  row: string;
+  seat: string;
+  notes: string | null;
+}
+
+export interface TicketSummary {
+  game_pk: number;
+  total: number;
+  available: number;
+}
+
+export interface GameTicketDetail {
+  id: number;
+  game_pk: number;
+  seat_id: number;
+  section: string;
+  row: string;
+  seat: string;
+  status: string;
+  notes: string | null;
+}
+
 export interface Promotion {
   offer_id: number;
   game_pk: number;

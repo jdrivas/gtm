@@ -9,10 +9,11 @@ import {
   Home,
   Plane,
   Gift,
+  Ticket,
   Tag,
   X,
 } from 'lucide-react';
-import type { Game, Promotion } from './types';
+import type { Game, Promotion, TicketSummary } from './types';
 import { fetchPromotions } from './api';
 
 const GIANTS_TEAM_NAME = 'San Francisco Giants';
@@ -87,6 +88,7 @@ interface Props {
   seasons: string[];
   selectedSeason: string;
   onSeasonChange: (season: string) => void;
+  ticketSummary: Record<number, TicketSummary>;
 }
 
 export default function ScheduleTable({
@@ -94,6 +96,7 @@ export default function ScheduleTable({
   seasons,
   selectedSeason,
   onSeasonChange,
+  ticketSummary,
 }: Props) {
   const [selectedMonth, setSelectedMonth] = useState('All');
   const [sortKey, setSortKey] = useState<SortKey>('official_date');
@@ -309,6 +312,7 @@ export default function ScheduleTable({
               </th>
               <th className="px-3 py-2 whitespace-nowrap">D/N</th>
               <th className="px-3 py-2 whitespace-nowrap">DH</th>
+              <th className="px-3 py-2 whitespace-nowrap">Tickets</th>
               <th className="px-3 py-2 whitespace-nowrap">Promos</th>
             </tr>
           </thead>
@@ -329,6 +333,7 @@ export default function ScheduleTable({
                   gamePromos={gamePromos}
                   loadingPromos={loadingPromos === g.game_pk}
                   onToggle={() => toggleExpand(g.game_pk)}
+                  ticketSummary={isHome ? ticketSummary[g.game_pk] : undefined}
                 />
               );
             })}
@@ -347,6 +352,7 @@ function ScheduleRow({
   gamePromos,
   loadingPromos,
   onToggle,
+  ticketSummary,
 }: {
   game: Game;
   isHome: boolean;
@@ -355,6 +361,7 @@ function ScheduleRow({
   gamePromos: Promotion[];
   loadingPromos: boolean;
   onToggle: () => void;
+  ticketSummary?: TicketSummary;
 }) {
   const promoNames = gamePromos.map((p) => p.name).join(', ');
 
@@ -420,6 +427,18 @@ function ScheduleRow({
             '—'
           )}
         </td>
+        <td className="px-3 py-2 whitespace-nowrap">
+          {ticketSummary ? (
+            <span className="flex items-center gap-1">
+              <Ticket className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+              <span className={ticketSummary.available > 0 ? 'text-green-400 font-medium' : 'text-gray-500'}>
+                {ticketSummary.available}/{ticketSummary.total}
+              </span>
+            </span>
+          ) : (
+            <span className="text-gray-600">—</span>
+          )}
+        </td>
         <td className="px-3 py-2 text-gray-300 max-w-[300px]">
           {promoNames ? (
             <span className="flex items-center gap-1">
@@ -433,7 +452,7 @@ function ScheduleRow({
       </tr>
       {isExpanded && (
         <tr className="bg-gray-900/50">
-          <td colSpan={11} className="px-4 py-3">
+          <td colSpan={12} className="px-4 py-3">
             <GameDetail
               game={game}
               promotions={gamePromos}
