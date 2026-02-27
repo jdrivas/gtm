@@ -68,6 +68,15 @@ pub struct GameTicket {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct User {
+    pub id: i64,
+    pub auth0_sub: String,
+    pub email: String,
+    pub name: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct GameTicketDetail {
     pub id: i64,
     pub game_pk: i64,

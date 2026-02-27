@@ -114,13 +114,50 @@ gtm --utc serve              # Example: UTC timestamps
 - [x] Add CLI: `add-seat`, `list-seats`, implement `list-tickets`
 - [x] Frontend: ticket availability badges (available/total) on home game rows in ScheduleTable
 
-### Phase 2d — Users & Ticket Allocation
-- [ ] Create migration for `users` table (name, email)
-- [ ] Add `user_id` (nullable FK) column to `game_tickets` table
-- [ ] User CRUD: DB functions, API endpoints, CLI commands
-- [ ] Ticket allocation: assign `user_id` on `game_tickets`, set status to `assigned`
-- [ ] API: `GET /api/users`, `POST /api/users`, `PATCH /api/tickets/{id}` (assign user)
-- [ ] Frontend: user picker, per-game seat selection UI, "My Games" view
+### Phase 2d — Auth, Users & Ticket Allocation
+
+#### 2d-auth: Auth0 Integration ✅
+- [x] Auth0 tenant setup (momentlabs.auth0.com, SPA app, API audience)
+- [x] Frontend: `@auth0/auth0-react`, `Auth0Provider` in `main.tsx`
+- [x] Frontend: Login/logout button in nav header (`App.tsx`)
+- [x] Frontend: Auth-aware fetch with Bearer token (`api.ts` → `authFetch`)
+- [x] Backend: `jsonwebtoken` + `reqwest` deps, JWKS fetch at startup
+- [x] Backend: `AuthUser` extractor (JWT validation: signature, expiry, audience, issuer)
+- [x] Backend: `AppState` with `FromRef` for `SqlitePool` + `Arc<AuthConfig>`
+- [x] Backend: `users` table migration + `User` model + DB functions (`upsert_user`, `get_user_by_sub`, `list_users`)
+- [x] Backend: `GET /api/users/me` (auto-provision on first login, first user = admin)
+- [x] Backend: `GET /api/users` (list all, requires auth)
+- [x] Backend: CORS layer, `AUTH0_DOMAIN` / `AUTH0_AUDIENCE` env vars
+- [x] Updated ARCHITECTURE.md with auth flow, users table, env vars, component tree
+
+#### 2d-config: Unified Config Management ✅
+- [x] New `crates/config` crate with `Config` struct (single source of truth)
+- [x] Layered resolution: compiled defaults → `~/.gtm/config.toml` → env vars → CLI args
+- [x] Migrated all existing settings: `db_url`, `port`, `log_level`, `utc`, `auth0_domain`, `auth0_audience`
+- [x] CLI args made optional (use config values when not explicitly provided)
+- [x] `POST /api/admin/scrape-schedule` endpoint (auth-protected, for remote triggering)
+- [x] CLI remains direct-DB by design (admin tool that works even when server is down)
+
+#### 2d-families: Family Grouping
+- [ ] `families` table migration + model + CRUD
+- [ ] Add `family_id` to `users` table
+- [ ] Admin UI: manage families, assign users to families
+- [ ] API: `GET/POST /api/families`, `PATCH /api/users/{id}` (set family)
+
+#### 2d-requests: Ticket Request Workflow
+- [ ] `ticket_requests` table migration + model
+- [ ] `POST /api/requests` — member creates request (family_id derived from user)
+- [ ] `GET /api/requests` — admin sees all; member sees own family's
+- [ ] Frontend: "Request Tickets" button on schedule, family request list
+
+#### 2d-allocation: Admin Draft Board
+- [ ] `GET /api/allocation/games` — demand summary per game
+- [ ] `GET /api/allocation/games/{game_pk}` — all requests + assignments for a game
+- [ ] `POST /api/allocation/games/{game_pk}` — bulk-assign seats to families
+- [ ] Add `family_id` column to `game_tickets`
+- [ ] Frontend: allocation dashboard (oversubscription view, assign, finalize)
+- [ ] Post-allocation: waitlisted requests, admin reassign, voluntary release
+- [ ] `GET /api/my/games` — family's assigned tickets ("My Games" view)
 
 ### Phase 3 — Frontend Build-Out
 - [ ] Schedule view page (calendar or list)
@@ -135,3 +172,5 @@ gtm --utc serve              # Example: UTC timestamps
 - [ ] Switch DB feature flag to Postgres for release builds
 - [ ] AWS ECR for images, EKS for cluster
 - [ ] CI/CD pipeline (TBD)
+- [ ] **DB credentials via AWS IAM** — DB (Postgres/RDS) must not be exposed to public internet. Server runs in AWS VPC and authenticates to RDS using IAM credentials (not static passwords). The `Config` struct will need a new resolution path for AWS-managed secrets (e.g., IAM auth token, Secrets Manager, or env vars injected by EKS).
+- [ ] **CLI access post-deployment** — Determine best approach for admin CLI access to production DB (e.g., bastion host, SSM Session Manager, or a VPN into the VPC). Defer until deployment is underway.

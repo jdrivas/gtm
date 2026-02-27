@@ -1,11 +1,15 @@
-use axum::{Router, extract::{Path, Query, State}, routing::{delete, get, patch, post}, Json};
+use axum::{Router, extract::{FromRef, FromRequestParts, Path, Query, State}, routing::{delete, get, patch, post}, Json};
+use axum::http::{StatusCode, request::Parts};
 use chrono::{Datelike, Local};
 use clap::{Parser, Subcommand, ValueEnum};
-use serde::Deserialize;
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::SqlitePool;
+use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::time::OffsetTime;
 
@@ -44,17 +48,17 @@ impl std::fmt::Display for LogLevel {
 #[command(about = "SF Giants Ticket Manager")]
 #[command(version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GTM_GIT_HASH"), ")"))]
 struct Cli {
-    /// Log level
-    #[arg(short, long, default_value = "info", global = true)]
-    log_level: LogLevel,
+    /// Log level (overrides config file and env)
+    #[arg(short, long, global = true)]
+    log_level: Option<LogLevel>,
 
     /// Display log timestamps in UTC (default: local time)
     #[arg(long, global = true)]
     utc: bool,
 
-    /// Database URL
-    #[arg(long, default_value = "sqlite:gtm.db", global = true)]
-    db_url: String,
+    /// Database URL (overrides config file and env)
+    #[arg(long, global = true)]
+    db_url: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -64,9 +68,9 @@ struct Cli {
 enum Commands {
     /// Start the HTTP server
     Serve {
-        /// Port to listen on
-        #[arg(short, long, default_value = "3000")]
-        port: u16,
+        /// Port to listen on (overrides config file and env)
+        #[arg(short, long)]
+        port: Option<u16>,
     },
     /// Display a hello world message
     Hello,
@@ -105,10 +109,10 @@ enum Commands {
 
 // --- Logging ---
 
-fn init_logging(cli: &Cli) {
-    let filter = EnvFilter::new(cli.log_level.to_string());
+fn init_logging(config: &gtm_config::Config) {
+    let filter = EnvFilter::new(&config.log_level);
 
-    if cli.utc {
+    if config.utc {
         tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_timer(OffsetTime::new(
@@ -132,6 +136,128 @@ impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
     fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
         let now = Local::now();
         write!(w, "{}", now.format("%Y-%m-%dT%H:%M:%S%.3f%:z"))
+    }
+}
+
+// --- Auth ---
+
+#[derive(Clone)]
+struct AppState {
+    pool: SqlitePool,
+    auth: Arc<AuthConfig>,
+}
+
+impl axum::extract::FromRef<AppState> for SqlitePool {
+    fn from_ref(state: &AppState) -> SqlitePool {
+        state.pool.clone()
+    }
+}
+
+struct AuthConfig {
+    jwks_keys: Vec<JwkKey>,
+    audience: String,
+    issuer: String,
+}
+
+#[derive(Clone)]
+struct JwkKey {
+    kid: String,
+    decoding_key: DecodingKey,
+}
+
+#[derive(Debug, Deserialize)]
+struct Claims {
+    sub: String,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+/// Fetch JWKS from Auth0 and extract RSA decoding keys
+async fn fetch_jwks(domain: &str) -> anyhow::Result<Vec<JwkKey>> {
+    let url = format!("https://{domain}/.well-known/jwks.json");
+    let resp: serde_json::Value = reqwest::get(&url).await?.json().await?;
+    let keys = resp["keys"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("No keys in JWKS response"))?;
+
+    let mut result = Vec::new();
+    for key in keys {
+        let kid = key["kid"].as_str().unwrap_or_default().to_string();
+        let n = key["n"].as_str().unwrap_or_default();
+        let e = key["e"].as_str().unwrap_or_default();
+        if kid.is_empty() || n.is_empty() || e.is_empty() {
+            continue;
+        }
+        match DecodingKey::from_rsa_components(n, e) {
+            Ok(decoding_key) => result.push(JwkKey { kid, decoding_key }),
+            Err(err) => warn!("Skipping JWK kid={kid}: {err}"),
+        }
+    }
+    info!("Fetched {} JWKS keys from {domain}", result.len());
+    Ok(result)
+}
+
+/// Axum extractor that validates a JWT Bearer token and returns the claims.
+/// Returns 401 if the token is missing or invalid.
+struct AuthUser {
+    sub: String,
+    email: Option<String>,
+    name: Option<String>,
+}
+
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+    Arc<AuthConfig>: axum::extract::FromRef<S>,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth_config = Arc::<AuthConfig>::from_ref(state);
+
+        let auth_header = parts
+            .headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .ok_or((StatusCode::UNAUTHORIZED, "Missing Authorization header".to_string()))?;
+
+        let token = auth_header
+            .strip_prefix("Bearer ")
+            .ok_or((StatusCode::UNAUTHORIZED, "Invalid Authorization header format".to_string()))?;
+
+        // Decode header to get kid
+        let header = decode_header(token)
+            .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Invalid token header: {e}")))?;
+
+        let kid = header.kid
+            .ok_or((StatusCode::UNAUTHORIZED, "Token missing kid".to_string()))?;
+
+        // Find matching key
+        let jwk_key = auth_config.jwks_keys.iter()
+            .find(|k| k.kid == kid)
+            .ok_or((StatusCode::UNAUTHORIZED, "No matching JWK for kid".to_string()))?;
+
+        // Validate token
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_audience(&[&auth_config.audience]);
+        validation.set_issuer(&[&auth_config.issuer]);
+
+        let token_data = decode::<Claims>(token, &jwk_key.decoding_key, &validation)
+            .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Token validation failed: {e}")))?;
+
+        Ok(AuthUser {
+            sub: token_data.claims.sub,
+            email: token_data.claims.email,
+            name: token_data.claims.name,
+        })
+    }
+}
+
+impl axum::extract::FromRef<AppState> for Arc<AuthConfig> {
+    fn from_ref(state: &AppState) -> Arc<AuthConfig> {
+        state.auth.clone()
     }
 }
 
@@ -329,8 +455,89 @@ async fn api_ticket_summary(
     Ok(Json(result))
 }
 
-async fn run_server(port: u16, pool: SqlitePool) -> anyhow::Result<()> {
+// --- User API endpoints ---
+
+async fn api_get_me(
+    auth_user: AuthUser,
+    State(pool): State<SqlitePool>,
+) -> Result<Json<gtm_models::User>, (StatusCode, String)> {
+    let name = auth_user.name.as_deref().unwrap_or("Unknown");
+    let email = auth_user.email.as_deref().unwrap_or("unknown@example.com");
+    let user = gtm_db::upsert_user(&pool, &auth_user.sub, email, name)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(user))
+}
+
+async fn api_list_users(
+    _auth_user: AuthUser,
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Vec<gtm_models::User>>, (StatusCode, String)> {
+    gtm_db::list_users(&pool)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+#[derive(Deserialize)]
+struct ScrapeScheduleRequest {
+    season: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ScrapeScheduleResponse {
+    games: usize,
+    promotions: usize,
+    tickets: usize,
+}
+
+async fn api_scrape_schedule(
+    _auth_user: AuthUser,
+    State(pool): State<SqlitePool>,
+    Json(body): Json<ScrapeScheduleRequest>,
+) -> Result<Json<ScrapeScheduleResponse>, (StatusCode, String)> {
+    let season = body.season.unwrap_or(chrono::Local::now().year() as u32);
+    let data = gtm_scraper::fetch_schedule(season)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    for game in &data.games {
+        gtm_db::upsert_game(&pool, game)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    for promo in &data.promotions {
+        gtm_db::upsert_promotion(&pool, promo)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    let ticket_count = gtm_db::generate_tickets_for_all_seats(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    info!("{} games, {} promotions upserted, {} tickets generated", data.games.len(), data.promotions.len(), ticket_count);
+    Ok(Json(ScrapeScheduleResponse {
+        games: data.games.len(),
+        promotions: data.promotions.len(),
+        tickets: ticket_count as usize,
+    }))
+}
+
+async fn run_server(port: u16, pool: SqlitePool, auth_domain: &str, auth_audience: &str) -> anyhow::Result<()> {
     info!("GTM v{}", version_string());
+
+    // Fetch JWKS from Auth0 at startup
+    let jwks_keys = fetch_jwks(auth_domain).await?;
+    let auth_config = Arc::new(AuthConfig {
+        jwks_keys,
+        audience: auth_audience.to_string(),
+        issuer: format!("https://{auth_domain}/"),
+    });
+
+    let state = AppState {
+        pool,
+        auth: auth_config,
+    };
+
+    let cors = CorsLayer::permissive();
 
     let api_routes = Router::new()
         .route("/health", get(health))
@@ -343,12 +550,16 @@ async fn run_server(port: u16, pool: SqlitePool) -> anyhow::Result<()> {
         .route("/seats/group", patch(api_update_seat_group))
         .route("/seats/{id}", delete(api_delete_seat))
         .route("/tickets/{id}", patch(api_update_ticket))
-        .route("/tickets/summary", get(api_ticket_summary));
+        .route("/tickets/summary", get(api_ticket_summary))
+        .route("/users/me", get(api_get_me))
+        .route("/users", get(api_list_users))
+        .route("/admin/scrape-schedule", post(api_scrape_schedule));
 
     let app = Router::new()
         .nest("/api", api_routes)
         .fallback_service(ServeDir::new("frontend/dist").fallback(tower_http::services::ServeFile::new("frontend/dist/index.html")))
-        .with_state(pool);
+        .layer(cors)
+        .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
     info!("Listening on http://{addr}");
@@ -359,33 +570,57 @@ async fn run_server(port: u16, pool: SqlitePool) -> anyhow::Result<()> {
     Ok(())
 }
 
+// --- DB helper ---
+
+async fn connect_db(config: &gtm_config::Config) -> anyhow::Result<SqlitePool> {
+    let pool = gtm_db::connect(&config.db_url).await?;
+    gtm_db::migrate(&pool).await?;
+    Ok(pool)
+}
+
 // --- Main ---
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    init_logging(&cli);
 
-    // Connect to DB and run migrations for commands that need it
+    // Load config: defaults → file → env
+    let mut config = gtm_config::Config::load();
+
+    // Layer 4: CLI args (highest precedence)
+    if let Some(ref level) = cli.log_level {
+        config.log_level = level.to_string();
+    }
+    if cli.utc {
+        config.utc = true;
+    }
+    if let Some(ref url) = cli.db_url {
+        config.db_url = url.clone();
+    }
+    if let Commands::Serve { port: Some(p) } = &cli.command {
+        config.port = *p;
+    }
+
+    init_logging(&config);
+
+    // Connect to DB for commands that need it (CLI always uses direct DB)
     let needs_db = !matches!(cli.command, Commands::Hello);
     let pool = if needs_db {
-        let pool = gtm_db::connect(&cli.db_url).await?;
-        gtm_db::migrate(&pool).await?;
-        Some(pool)
+        Some(connect_db(&config).await?)
     } else {
         None
     };
 
     match cli.command {
-        Commands::Serve { port } => {
-            run_server(port, pool.unwrap()).await?;
-        }
         Commands::Hello => {
             println!("Hello, Giants! 🏟️");
         }
+        Commands::Serve { .. } => {
+            run_server(config.port, pool.unwrap(), &config.auth0_domain, &config.auth0_audience).await?;
+        }
         Commands::ScrapeSchedule { season } => {
-            let data = gtm_scraper::fetch_schedule(season).await?;
             let db = pool.as_ref().unwrap();
+            let data = gtm_scraper::fetch_schedule(season).await?;
             for game in &data.games {
                 gtm_db::upsert_game(db, game).await?;
             }
@@ -421,14 +656,8 @@ async fn main() -> anyhow::Result<()> {
                     };
                     println!(
                         "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {:<20} {}",
-                        g.game_pk,
-                        g.official_date,
-                        time_display,
-                        home_away,
-                        opponent,
-                        g.status_detailed,
-                        g.venue_name,
-                        promo_display,
+                        g.game_pk, g.official_date, time_display, home_away, opponent,
+                        g.status_detailed, g.venue_name, promo_display,
                     );
                 }
                 println!("\n{} game(s) total", games.len());
@@ -476,12 +705,8 @@ async fn main() -> anyhow::Result<()> {
                     }).collect();
                     println!(
                         "{:<10} {:<12} {:<25} {}/{} — {}",
-                        g.game_pk,
-                        g.official_date,
-                        g.away_team_name,
-                        available,
-                        tickets.len(),
-                        detail.join(", "),
+                        g.game_pk, g.official_date, g.away_team_name,
+                        available, tickets.len(), detail.join(", "),
                     );
                 }
                 println!("\n{} home game(s), {} seat(s)", home_games.len(), seats.len());

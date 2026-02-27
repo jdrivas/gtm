@@ -1,23 +1,30 @@
 # GTM — Architecture & Theory of Operations
 
-> **Version:** 0.1.1 · **Last updated:** 2026-02-26
+> **Version:** 0.2.0 · **Last updated:** 2026-02-26
 
 ## 1. System Overview
 
 GTM (Giants Ticket Manager) is a season-ticket management tool for the San Francisco Giants. It ingests the official MLB schedule, maps season-ticket seats to every home game, and provides a web UI and CLI for managing seat inventory and (soon) allocating tickets to users.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Operators / Users                   │
-│                                                         │
-│   CLI (gtm binary)              Browser (React SPA)     │
-│        │                              │                  │
-└────────┼──────────────────────────────┼──────────────────┘
-         │                              │
-         ▼                              ▼
+                        ┌───────────────────┐
+                        │   Auth0           │
+                        │   (momentlabs.    │
+                        │    auth0.com)     │
+                        └──────┬────────────┘
+                               │ JWKS / JWT
+┌──────────────────────────────┼──────────────────────────┐
+│           Operators / Users  │                           │
+│                              │                           │
+│   CLI (gtm binary)           │    Browser (React SPA)    │
+│        │                     │         │                 │
+└────────┼─────────────────────┼─────────┼─────────────────┘
+         │                     │         │
+         ▼                     ▼         ▼
 ┌─────────────────────────────────────────────────────────┐
 │                    Axum HTTP Server                       │
 │                                                         │
+│  JWT validation middleware (JWKS from Auth0)             │
 │  /api/*  ─── JSON REST API                              │
 │  /*      ─── Static file serving (SPA fallback)         │
 │                                                         │
@@ -51,6 +58,8 @@ gtm/
 ├── crates/
 │   ├── app/                       # Unified binary — Axum server + Clap CLI
 │   │   └── src/main.rs
+│   ├── config/                    # Unified config: defaults → file → env → CLI
+│   │   └── src/lib.rs
 │   ├── db/                        # Database layer — SQLx (SQLite)
 │   │   └── src/lib.rs
 │   ├── models/                    # Shared domain structs (Serialize, FromRow)
@@ -75,6 +84,7 @@ gtm/
 
 ```
 app
+├── config
 ├── db
 │   └── models
 ├── models
@@ -82,7 +92,7 @@ app
     └── models
 ```
 
-`app` is the only binary crate. `db`, `models`, and `scraper` are libraries.
+`app` is the only binary crate. `config`, `db`, `models`, and `scraper` are libraries.
 
 ---
 
@@ -91,7 +101,8 @@ app
 | Layer         | Technology                                                |
 |---------------|-----------------------------------------------------------|
 | Language      | Rust (edition 2024)                                       |
-| HTTP Server   | Axum 0.8, Tokio, tower-http (ServeDir, ServeFile)         |
+| HTTP Server   | Axum 0.8, Tokio, tower-http (ServeDir, ServeFile, CORS)   |
+| Auth          | Auth0 (JWT/JWKS), jsonwebtoken crate, @auth0/auth0-react  |
 | CLI           | Clap 4 (derive macros)                                    |
 | Database      | SQLx (SQLite for dev; Postgres planned for prod)          |
 | Scraper       | reqwest + serde (MLB Stats API JSON)                      |
@@ -194,6 +205,22 @@ The cross-product of seats × home games. One row = one seat for one game.
 | `updated_at` | DATETIME| NOT NULL, DEFAULT now              |                          |
 |              |         | **UNIQUE(game_pk, seat_id)**       |                          |
 
+### 4.5 `users`
+
+Application users, linked to Auth0 identities. Auto-provisioned on first login.
+
+| Column       | Type    | Constraints                        | Description              |
+|--------------|---------|------------------------------------|---------------------------|
+| `id`         | INTEGER | PRIMARY KEY AUTOINCREMENT          |                          |
+| `auth0_sub`  | TEXT    | NOT NULL, UNIQUE                   | Auth0 user ID ("auth0\|abc123") |
+| `email`      | TEXT    | NOT NULL                           |                          |
+| `name`       | TEXT    | NOT NULL                           |                          |
+| `role`       | TEXT    | NOT NULL, DEFAULT 'member'         | "admin" or "member"      |
+| `created_at` | TEXT    | NOT NULL, DEFAULT now              |                          |
+| `updated_at` | TEXT    | NOT NULL, DEFAULT now              |                          |
+
+The first user to log in is automatically assigned the `admin` role.
+
 ### Entity Relationship Diagram
 
 ```
@@ -208,13 +235,13 @@ The cross-product of seats × home games. One row = one seat for one game.
      │ 1                                  │ notes    │
      │                                    └──────────┘
      │ *
-┌────┴──────────┐
-│  promotions   │
-│               │
-│ offer_id      │
-│ game_pk       │
-│ name          │
-└───────────────┘
+┌────┴──────────┐       ┌──────────┐
+│  promotions   │       │  users   │
+│               │       │          │
+│ offer_id      │       │ auth0_sub│
+│ game_pk       │       │ email    │
+│ name          │       │ role     │
+└───────────────┘       └──────────┘
 ```
 
 ---
@@ -275,7 +302,33 @@ The cross-product of seats × home games. One row = one seat for one game.
 
 Seats are grouped logically by **section + row** in the UI. Operations like "edit notes" and "delete group" apply to all seats sharing a section/row.
 
-### 5.3 Request Flow (HTTP)
+### 5.3 Authentication Flow
+
+```
+  Browser                         Auth0                    Axum Server
+    │                                │                         │
+    │  1. Click "Login"              │                         │
+    │  ─────────────────────────────►│                         │
+    │  ◄── Redirect to Universal    │                         │
+    │      Login (user signs in)    │                         │
+    │  ◄── JWT (access_token)       │                         │
+    │                                │                         │
+    │  2. GET /api/users/me          │                         │
+    │  Authorization: Bearer <token> │                         │
+    │  ──────────────────────────────────────────────────────►│
+    │                                │   Validate JWT (JWKS)   │
+    │                                │   Upsert user in DB     │
+    │  ◄──────────────────────────────────── { id, name, role }│
+    │                                │                         │
+    │  3. All subsequent API calls   │                         │
+    │     include Bearer token       │                         │
+```
+
+At server startup, JWKS keys are fetched from `https://{AUTH0_DOMAIN}/.well-known/jwks.json` and cached in memory. The `AuthUser` extractor validates every authenticated request by checking the JWT signature, expiry, audience, and issuer.
+
+The first user to log in is auto-assigned the `admin` role.
+
+### 5.4 Request Flow (HTTP)
 
 ```
   Browser
@@ -333,6 +386,13 @@ Base URL: `http://localhost:3000/api`
 |--------|----------------------|---------------------------|--------------------------------|
 | PATCH  | `/tickets/{id}`      | `{ status, notes? }`      | Update ticket status/notes     |
 | GET    | `/tickets/summary`   |                            | Per-game totals (total, available) |
+
+### Users (requires auth)
+
+| Method | Path            | Auth     | Description                              |
+|--------|-----------------|----------|------------------------------------------|
+| GET    | `/users/me`     | Required | Get/create current user (auto-provision) |
+| GET    | `/users`        | Required | List all users                           |
 
 ### SPA Fallback
 
@@ -408,22 +468,28 @@ Routing is handled by React Router (`BrowserRouter`). The Axum server's SPA fall
 ### Component Tree
 
 ```
-<BrowserRouter>
-  <App>                          ── Layout shell: header + nav
-    <Routes>
-      <Route path="/">
-        <SchedulePage>           ── Fetches games + ticket summary
-          <ScheduleTable>        ── Sortable table with expandable promo rows
-        </SchedulePage>
-      </Route>
-      <Route path="/admin/seats">
-        <SeatAdmin>              ── Seat group CRUD
-        </SeatAdmin>
-      </Route>
-    </Routes>
-  </App>
-</BrowserRouter>
+<Auth0Provider>                    ── Auth0 SDK (domain, clientId, audience)
+  <BrowserRouter>
+    <App>                          ── Layout shell: header + nav + login/logout
+      <Routes>
+        <Route path="/">
+          <SchedulePage>           ── Fetches games + ticket summary
+            <ScheduleTable>        ── Sortable table with expandable promo rows
+          </SchedulePage>
+        </Route>
+        <Route path="/admin/seats">
+          <SeatAdmin>              ── Seat group CRUD
+          </SeatAdmin>
+        </Route>
+      </Routes>
+    </App>
+  </BrowserRouter>
+</Auth0Provider>
 ```
+
+### Auth Integration
+
+The `App` component uses `useAuth0()` to manage login state and registers a token getter via `setTokenGetter()` in `api.ts`. All API calls automatically include `Authorization: Bearer <token>` when the user is authenticated.
 
 ### Data Flow
 
@@ -474,9 +540,20 @@ cargo run --bin gtm -- serve
 
 ### Environment
 
-| Variable       | Purpose                                      |
-|----------------|----------------------------------------------|
-| `GTM_GIT_HASH` | Set at compile time via `build.rs`; shown in `--version` and `/api/health` |
+All backend config follows **defaults → `~/.gtm/config.toml` → env var → CLI arg** precedence (managed by `crates/config`).
+
+| Variable            | Config key        | CLI flag       | Purpose                                      |
+|---------------------|-------------------|----------------|----------------------------------------------|
+| `GTM_GIT_HASH`      | —                 | —              | Set at compile time; shown in `--version` and `/api/health` |
+| `GTM_DB_URL`         | `db_url`          | `--db-url`     | Database connection URL (default: `sqlite:gtm.db`) |
+| `GTM_PORT`           | `port`            | `--port`       | Server listen port (default: 3000)           |
+| `GTM_LOG_LEVEL`      | `log_level`       | `--log-level`  | Logging verbosity (default: `info`)          |
+| `GTM_UTC`            | `utc`             | `--utc`        | UTC timestamps in logs (default: local)      |
+| `AUTH0_DOMAIN`       | `auth0_domain`    | —              | Auth0 tenant domain                          |
+| `AUTH0_AUDIENCE`     | `auth0_audience`  | —              | Auth0 API identifier                         |
+| `VITE_AUTH0_DOMAIN`  | —                 | —              | Frontend Auth0 domain (in `frontend/.env`)   |
+| `VITE_AUTH0_CLIENT_ID` | —               | —              | Frontend Auth0 SPA client ID                 |
+| `VITE_AUTH0_AUDIENCE`| —                 | —              | Frontend Auth0 audience                      |
 
 ---
 
@@ -493,3 +570,11 @@ cargo run --bin gtm -- serve
 5. **SPA fallback** — The Axum server uses `ServeDir` with a `ServeFile` fallback to `index.html`, enabling React Router client-side navigation without 404s on refresh.
 
 6. **Idempotent ingestion** — `upsert_game` and `upsert_promotion` use `ON CONFLICT ... DO UPDATE`, and ticket generation uses `INSERT OR IGNORE`. Running `scrape-schedule` multiple times is safe.
+
+7. **Auth0 + local users** — Auth0 handles identity (passwords, MFA, social login). The local `users` table stores app-specific data (`role`). Users are auto-provisioned on first login via `GET /api/users/me`. The first user gets `admin` role.
+
+8. **Unified config** — All configuration lives in a single `Config` struct (`crates/config`). Resolution order: compiled defaults → `~/.gtm/config.toml` → environment variables → CLI arguments. Adding a new config field means updating one struct, one file-config struct, and one env-var block — all in one file.
+
+9. **CLI is always direct-DB** — The CLI connects directly to SQLite for all commands. This ensures the CLI works as an admin tool even when the HTTP server is down.
+
+10. **JWKS cached at startup** — Auth0's JWKS endpoint is fetched once when the server starts. The `AuthUser` extractor validates JWT signatures against these cached keys. This avoids per-request HTTP calls to Auth0.

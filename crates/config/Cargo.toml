@@ -1,0 +1,9 @@
+[package]
+name = "gtm-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+toml = "0.8"
+dirs = "6"

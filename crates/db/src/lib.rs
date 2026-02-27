@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gtm_models::{Game, GameTicketDetail, Promotion, Seat};
+use gtm_models::{Game, GameTicketDetail, Promotion, Seat, User};
 use sqlx::SqlitePool;
 use tracing::info;
 
@@ -271,4 +271,49 @@ pub async fn ticket_summary_for_games(pool: &SqlitePool) -> Result<Vec<(i64, i64
     .fetch_all(pool)
     .await?;
     Ok(rows)
+}
+
+// --- Users ---
+
+pub async fn upsert_user(pool: &SqlitePool, auth0_sub: &str, email: &str, name: &str) -> Result<User> {
+    // Check if any users exist — first user becomes admin
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+        .fetch_one(pool)
+        .await?;
+    let role = if count.0 == 0 { "admin" } else { "member" };
+
+    let user = sqlx::query_as::<_, User>(
+        "INSERT INTO users (auth0_sub, email, name, role) VALUES (?, ?, ?, ?) \
+         ON CONFLICT(auth0_sub) DO UPDATE SET \
+            email = excluded.email, \
+            name = excluded.name, \
+            updated_at = datetime('now') \
+         RETURNING id, auth0_sub, email, name, role",
+    )
+    .bind(auth0_sub)
+    .bind(email)
+    .bind(name)
+    .bind(role)
+    .fetch_one(pool)
+    .await?;
+    Ok(user)
+}
+
+pub async fn get_user_by_sub(pool: &SqlitePool, auth0_sub: &str) -> Result<Option<User>> {
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, auth0_sub, email, name, role FROM users WHERE auth0_sub = ?",
+    )
+    .bind(auth0_sub)
+    .fetch_optional(pool)
+    .await?;
+    Ok(user)
+}
+
+pub async fn list_users(pool: &SqlitePool) -> Result<Vec<User>> {
+    let users = sqlx::query_as::<_, User>(
+        "SELECT id, auth0_sub, email, name, role FROM users ORDER BY name",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(users)
 }
