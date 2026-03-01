@@ -29,6 +29,12 @@ docker-compose.override.yml
 # Logs
 server.log
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
 # Environment
 .env
 .env.local
