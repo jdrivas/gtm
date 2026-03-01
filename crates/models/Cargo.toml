@@ -5,4 +5,4 @@ edition.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "any", "sqlite", "postgres"] }

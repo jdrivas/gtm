@@ -1,7 +1,6 @@
 # Rust
 /target/
 **/*.rs.bk
-Cargo.lock
 
 # SQLite
 *.db
@@ -23,6 +22,9 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Docker
+docker-compose.override.yml
 
 # Logs
 server.log

@@ -1,0 +1,143 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - '.windsurf/**'
+      - 'infra/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "image_tag=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ECR_REPOSITORY: gtm
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          docker build \
+            --build-arg GTM_GIT_HASH=${{ github.sha }} \
+            --build-arg VITE_AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }} \
+            --build-arg VITE_AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID }} \
+            --build-arg VITE_AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:staging-latest \
+            .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster gtm-staging \
+            --service gtm-staging \
+            --force-new-deployment \
+            --query 'service.taskDefinition' \
+            --output text
+
+      - name: Wait for service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster gtm-staging \
+            --services gtm-staging
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: [build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event.inputs.environment == 'prod' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag image for prod
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ECR_REPOSITORY: gtm
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=$IMAGE_TAG \
+            --query 'images[0].imageManifest' --output text)
+          aws ecr put-image \
+            --repository-name $ECR_REPOSITORY \
+            --image-tag prod-latest \
+            --image-manifest "$MANIFEST" || true
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster gtm-prod \
+            --service gtm-prod \
+            --force-new-deployment \
+            --query 'service.taskDefinition' \
+            --output text
+
+      - name: Wait for service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster gtm-prod \
+            --services gtm-prod

@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS game_tickets (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     game_pk INTEGER NOT NULL REFERENCES games(game_pk),
     seat_id INTEGER NOT NULL REFERENCES seats(id),
     status TEXT NOT NULL DEFAULT 'available',
     notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
     UNIQUE(game_pk, seat_id)
 );

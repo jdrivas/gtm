@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::SqlitePool;
+use sqlx::AnyPool;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -143,12 +143,12 @@ impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
 
 #[derive(Clone)]
 struct AppState {
-    pool: SqlitePool,
+    pool: AnyPool,
     auth: Arc<AuthConfig>,
 }
 
-impl axum::extract::FromRef<AppState> for SqlitePool {
-    fn from_ref(state: &AppState) -> SqlitePool {
+impl axum::extract::FromRef<AppState> for AnyPool {
+    fn from_ref(state: &AppState) -> AnyPool {
         state.pool.clone()
     }
 }
@@ -168,10 +168,12 @@ struct JwkKey {
 #[derive(Debug, Deserialize)]
 struct Claims {
     sub: String,
-    #[serde(default)]
+    #[serde(default, rename = "https://gtm-api.momentlabs.io/email")]
     email: Option<String>,
-    #[serde(default)]
+    #[serde(default, rename = "https://gtm-api.momentlabs.io/name")]
     name: Option<String>,
+    #[serde(default, rename = "https://gtm-api.momentlabs.io/roles")]
+    roles: Vec<String>,
 }
 
 /// Fetch JWKS from Auth0 and extract RSA decoding keys
@@ -205,6 +207,7 @@ struct AuthUser {
     sub: String,
     email: Option<String>,
     name: Option<String>,
+    roles: Vec<String>,
 }
 
 impl<S> FromRequestParts<S> for AuthUser
@@ -251,6 +254,7 @@ where
             sub: token_data.claims.sub,
             email: token_data.claims.email,
             name: token_data.claims.name,
+            roles: token_data.claims.roles,
         })
     }
 }
@@ -277,7 +281,7 @@ struct GamesQuery {
 }
 
 async fn api_list_games(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Query(params): Query<GamesQuery>,
 ) -> Result<Json<Vec<gtm_models::Game>>, (axum::http::StatusCode, String)> {
     gtm_db::list_games(&pool, params.month)
@@ -287,7 +291,7 @@ async fn api_list_games(
 }
 
 async fn api_get_game(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Path(game_pk): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     match gtm_db::get_game(&pool, game_pk).await {
@@ -298,7 +302,7 @@ async fn api_get_game(
 }
 
 async fn api_get_game_promotions(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Path(game_pk): Path<i64>,
 ) -> Result<Json<Vec<gtm_models::Promotion>>, (axum::http::StatusCode, String)> {
     gtm_db::get_promotions_for_game(&pool, game_pk)
@@ -316,7 +320,7 @@ struct AddSeatRequest {
 }
 
 async fn api_add_seat(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Json(body): Json<AddSeatRequest>,
 ) -> Result<Json<gtm_models::Seat>, (axum::http::StatusCode, String)> {
     let seat = gtm_db::add_seat(&pool, &body.section, &body.row, &body.seat, body.notes.as_deref())
@@ -330,7 +334,7 @@ async fn api_add_seat(
 }
 
 async fn api_list_seats(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
 ) -> Result<Json<Vec<gtm_models::Seat>>, (axum::http::StatusCode, String)> {
     gtm_db::list_seats(&pool)
         .await
@@ -348,7 +352,7 @@ struct AddSeatBatchRequest {
 }
 
 async fn api_add_seat_batch(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Json(body): Json<AddSeatBatchRequest>,
 ) -> Result<Json<Vec<gtm_models::Seat>>, (axum::http::StatusCode, String)> {
     if body.seat_start > body.seat_end {
@@ -379,7 +383,7 @@ struct UpdateSeatGroupRequest {
 }
 
 async fn api_update_seat_group(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Json(body): Json<UpdateSeatGroupRequest>,
 ) -> Result<Json<Vec<gtm_models::Seat>>, (axum::http::StatusCode, String)> {
     let updated = gtm_db::update_seat_group_notes(&pool, &body.section, &body.row, body.notes.as_deref())
@@ -396,7 +400,7 @@ async fn api_update_seat_group(
 }
 
 async fn api_delete_seat(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Path(seat_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let deleted = gtm_db::delete_seat(&pool, seat_id)
@@ -410,7 +414,7 @@ async fn api_delete_seat(
 }
 
 async fn api_get_game_tickets(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Path(game_pk): Path<i64>,
 ) -> Result<Json<Vec<gtm_models::GameTicketDetail>>, (axum::http::StatusCode, String)> {
     gtm_db::list_tickets_for_game(&pool, game_pk)
@@ -426,7 +430,7 @@ struct UpdateTicketRequest {
 }
 
 async fn api_update_ticket(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Path(ticket_id): Path<i64>,
     Json(body): Json<UpdateTicketRequest>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
@@ -441,7 +445,7 @@ async fn api_update_ticket(
 }
 
 async fn api_ticket_summary(
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
 ) -> Result<Json<Vec<serde_json::Value>>, (axum::http::StatusCode, String)> {
     let summary = gtm_db::ticket_summary_for_games(&pool)
         .await
@@ -459,19 +463,15 @@ async fn api_ticket_summary(
 
 async fn api_get_me(
     auth_user: AuthUser,
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
 ) -> Result<Json<gtm_models::User>, (StatusCode, String)> {
-    let name = auth_user.name.as_deref().unwrap_or("Unknown");
-    let email = auth_user.email.as_deref().unwrap_or("unknown@example.com");
-    let user = gtm_db::upsert_user(&pool, &auth_user.sub, email, name)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = resolve_user(&auth_user, &pool).await?;
     Ok(Json(user))
 }
 
 async fn api_list_users(
     _auth_user: AuthUser,
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
 ) -> Result<Json<Vec<gtm_models::User>>, (StatusCode, String)> {
     gtm_db::list_users(&pool)
         .await
@@ -493,7 +493,7 @@ struct ScrapeScheduleResponse {
 
 async fn api_scrape_schedule(
     _auth_user: AuthUser,
-    State(pool): State<SqlitePool>,
+    State(pool): State<AnyPool>,
     Json(body): Json<ScrapeScheduleRequest>,
 ) -> Result<Json<ScrapeScheduleResponse>, (StatusCode, String)> {
     let season = body.season.unwrap_or(chrono::Local::now().year() as u32);
@@ -521,7 +521,372 @@ async fn api_scrape_schedule(
     }))
 }
 
-async fn run_server(port: u16, pool: SqlitePool, auth_domain: &str, auth_audience: &str) -> anyhow::Result<()> {
+// --- Helper: resolve AuthUser → local User ---
+
+async fn resolve_user(
+    auth_user: &AuthUser,
+    pool: &AnyPool,
+) -> Result<gtm_models::User, (StatusCode, String)> {
+    let name = auth_user.name.as_deref().unwrap_or("Unknown");
+    let email = auth_user.email.as_deref().unwrap_or("unknown@example.com");
+    let role = if auth_user.roles.contains(&"admin".to_string()) { "admin" } else { "member" };
+    gtm_db::upsert_user(pool, &auth_user.sub, email, name, role)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+fn require_admin(auth_user: &AuthUser) -> Result<(), (StatusCode, String)> {
+    if !auth_user.roles.contains(&"admin".to_string()) {
+        Err((StatusCode::FORBIDDEN, "Admin access required".to_string()))
+    } else {
+        Ok(())
+    }
+}
+
+// --- Member: Ticket Requests ---
+
+#[derive(Deserialize)]
+struct CreateRequestBody {
+    game_pk: i64,
+    seats_requested: i64,
+    notes: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CreateRequestBatchBody {
+    requests: Vec<CreateRequestBody>,
+}
+
+async fn api_my_requests_list(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+) -> Result<Json<Vec<gtm_models::TicketRequest>>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    gtm_db::list_requests_for_user(&pool, user.id)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn api_my_requests_create(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Json(body): Json<CreateRequestBatchBody>,
+) -> Result<Json<Vec<gtm_models::TicketRequest>>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    let mut results = Vec::new();
+    for req in &body.requests {
+        if req.seats_requested < 1 || req.seats_requested > 4 {
+            return Err((StatusCode::BAD_REQUEST, format!("seats_requested must be 1-4 (got {} for game_pk {})", req.seats_requested, req.game_pk)));
+        }
+        let tr = gtm_db::create_ticket_request(&pool, user.id, req.game_pk, req.seats_requested, req.notes.as_deref())
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        results.push(tr);
+    }
+    Ok(Json(results))
+}
+
+#[derive(Deserialize)]
+struct UpdateRequestBody {
+    seats_requested: i64,
+}
+
+async fn api_my_requests_update(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(request_id): Path<i64>,
+    Json(body): Json<UpdateRequestBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    if body.seats_requested < 1 || body.seats_requested > 4 {
+        return Err((StatusCode::BAD_REQUEST, "seats_requested must be 1-4".to_string()));
+    }
+    let updated = gtm_db::update_ticket_request(&pool, request_id, user.id, body.seats_requested)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if updated {
+        Ok(Json(json!({ "status": "ok" })))
+    } else {
+        Err((StatusCode::NOT_FOUND, "Request not found or not pending".to_string()))
+    }
+}
+
+async fn api_my_requests_withdraw(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(request_id): Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    let withdrawn = gtm_db::withdraw_ticket_request(&pool, request_id, user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if withdrawn {
+        Ok(Json(json!({ "status": "ok" })))
+    } else {
+        Err((StatusCode::NOT_FOUND, "Request not found or not pending".to_string()))
+    }
+}
+
+// --- Member: My Games ---
+
+async fn api_my_games(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+) -> Result<Json<Vec<gtm_models::GameTicketDetail>>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    gtm_db::list_tickets_for_user(&pool, user.id)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn api_my_games_release(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(game_pk): Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    let count = gtm_db::release_tickets_for_game(&pool, game_pk, user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(json!({ "status": "ok", "released": count })))
+}
+
+// --- Admin: Allocation ---
+
+#[derive(Serialize)]
+struct AllocationSummaryRow {
+    game_pk: i64,
+    official_date: String,
+    away_team_name: String,
+    total_seats: i64,
+    assigned: i64,
+    available: i64,
+    total_requested: i64,
+    oversubscribed: bool,
+}
+
+async fn api_admin_allocation(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+) -> Result<Json<Vec<AllocationSummaryRow>>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    let summary = gtm_db::allocation_summary(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let games = gtm_db::list_games(&pool, None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let game_map: std::collections::HashMap<i64, &gtm_models::Game> =
+        games.iter().map(|g| (g.game_pk, g)).collect();
+
+    let rows: Vec<AllocationSummaryRow> = summary
+        .into_iter()
+        .filter_map(|(game_pk, total_seats, assigned, available, total_requested)| {
+            let g = game_map.get(&game_pk)?;
+            Some(AllocationSummaryRow {
+                game_pk,
+                official_date: g.official_date.clone(),
+                away_team_name: g.away_team_name.clone(),
+                total_seats,
+                assigned,
+                available,
+                total_requested,
+                oversubscribed: total_requested > available,
+            })
+        })
+        .collect();
+
+    Ok(Json(rows))
+}
+
+#[derive(Serialize)]
+struct GameAllocationDetail {
+    game: gtm_models::Game,
+    tickets: Vec<GameTicketWithUser>,
+    requests: Vec<RequestWithUser>,
+}
+
+#[derive(Serialize)]
+struct GameTicketWithUser {
+    id: i64,
+    seat_id: i64,
+    section: String,
+    row: String,
+    seat: String,
+    status: String,
+    assigned_to: Option<i64>,
+    assigned_user_name: Option<String>,
+}
+
+#[derive(Serialize)]
+struct RequestWithUser {
+    id: i64,
+    user_id: i64,
+    user_name: String,
+    seats_requested: i64,
+    seats_approved: i64,
+    status: String,
+    notes: Option<String>,
+}
+
+async fn api_admin_allocation_game(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(game_pk): Path<i64>,
+) -> Result<Json<GameAllocationDetail>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    let game = gtm_db::get_game(&pool, game_pk)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Game not found".to_string()))?;
+
+    let tickets = gtm_db::list_tickets_for_game(&pool, game_pk)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let requests = gtm_db::list_requests_for_game(&pool, game_pk)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let users = gtm_db::list_users(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user_map: std::collections::HashMap<i64, &gtm_models::User> =
+        users.iter().map(|u| (u.id, u)).collect();
+
+    let tickets_with_user: Vec<GameTicketWithUser> = tickets
+        .into_iter()
+        .map(|t| GameTicketWithUser {
+            id: t.id,
+            seat_id: t.seat_id,
+            section: t.section,
+            row: t.row,
+            seat: t.seat,
+            status: t.status,
+            assigned_to: t.assigned_to,
+            assigned_user_name: t.assigned_to.and_then(|uid| user_map.get(&uid).map(|u| u.name.clone())),
+        })
+        .collect();
+
+    let requests_with_user: Vec<RequestWithUser> = requests
+        .into_iter()
+        .map(|r| RequestWithUser {
+            id: r.id,
+            user_id: r.user_id,
+            user_name: user_map.get(&r.user_id).map(|u| u.name.clone()).unwrap_or_default(),
+            seats_requested: r.seats_requested,
+            seats_approved: r.seats_approved,
+            status: r.status,
+            notes: r.notes,
+        })
+        .collect();
+
+    Ok(Json(GameAllocationDetail {
+        game,
+        tickets: tickets_with_user,
+        requests: requests_with_user,
+    }))
+}
+
+#[derive(Deserialize)]
+struct AllocateBody {
+    game_ticket_id: i64,
+    user_id: i64,
+    request_id: Option<i64>,
+}
+
+#[derive(Deserialize)]
+struct AllocateBatchBody {
+    assignments: Vec<AllocateBody>,
+}
+
+async fn api_admin_allocate(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Json(body): Json<AllocateBatchBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    let mut assigned_count = 0u64;
+    // Track seats approved per request so we can update them
+    let mut request_approvals: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
+
+    for a in &body.assignments {
+        let ok = gtm_db::assign_ticket(&pool, a.game_ticket_id, a.user_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if ok {
+            assigned_count += 1;
+            if let Some(rid) = a.request_id {
+                *request_approvals.entry(rid).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Update request approval counts
+    for (request_id, seats) in &request_approvals {
+        gtm_db::update_request_approval(&pool, *request_id, *seats, "approved")
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    Ok(Json(json!({ "status": "ok", "assigned": assigned_count })))
+}
+
+async fn api_admin_revoke(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(game_ticket_id): Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    let ok = gtm_db::revoke_ticket(&pool, game_ticket_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if ok {
+        Ok(Json(json!({ "status": "ok" })))
+    } else {
+        Err((StatusCode::NOT_FOUND, "Ticket not found or not assigned".to_string()))
+    }
+}
+
+async fn api_admin_allocation_by_user(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(target_user_id): Path<i64>,
+) -> Result<Json<Vec<gtm_models::GameTicketDetail>>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    gtm_db::list_tickets_for_user(&pool, target_user_id)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn api_admin_requests(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+) -> Result<Json<Vec<gtm_models::TicketRequest>>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    gtm_db::list_all_pending_requests(&pool)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn run_server(port: u16, pool: AnyPool, auth_domain: &str, auth_audience: &str) -> anyhow::Result<()> {
     info!("GTM v{}", version_string());
 
     // Fetch JWKS from Auth0 at startup
@@ -553,7 +918,20 @@ async fn run_server(port: u16, pool: SqlitePool, auth_domain: &str, auth_audienc
         .route("/tickets/summary", get(api_ticket_summary))
         .route("/users/me", get(api_get_me))
         .route("/users", get(api_list_users))
-        .route("/admin/scrape-schedule", post(api_scrape_schedule));
+        .route("/admin/scrape-schedule", post(api_scrape_schedule))
+        // Member: ticket requests
+        .route("/my/requests", get(api_my_requests_list).post(api_my_requests_create))
+        .route("/my/requests/{id}", patch(api_my_requests_update).delete(api_my_requests_withdraw))
+        // Member: my games (allocated tickets)
+        .route("/my/games", get(api_my_games))
+        .route("/my/games/{game_pk}/release", post(api_my_games_release))
+        // Admin: allocation
+        .route("/admin/allocation", get(api_admin_allocation))
+        .route("/admin/allocation/{game_pk}", get(api_admin_allocation_game))
+        .route("/admin/allocate", post(api_admin_allocate))
+        .route("/admin/allocate/{id}", delete(api_admin_revoke))
+        .route("/admin/allocation/by-user/{user_id}", get(api_admin_allocation_by_user))
+        .route("/admin/requests", get(api_admin_requests));
 
     let app = Router::new()
         .nest("/api", api_routes)
@@ -572,9 +950,9 @@ async fn run_server(port: u16, pool: SqlitePool, auth_domain: &str, auth_audienc
 
 // --- DB helper ---
 
-async fn connect_db(config: &gtm_config::Config) -> anyhow::Result<SqlitePool> {
+async fn connect_db(config: &gtm_config::Config) -> anyhow::Result<AnyPool> {
     let pool = gtm_db::connect(&config.db_url).await?;
-    gtm_db::migrate(&pool).await?;
+    gtm_db::migrate(&pool, &config.db_url).await?;
     Ok(pool)
 }
 

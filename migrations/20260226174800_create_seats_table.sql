@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS seats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     section TEXT NOT NULL,
     row TEXT NOT NULL,
     seat TEXT NOT NULL,
     notes TEXT,
-    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-    updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(section, row, seat)
 );
