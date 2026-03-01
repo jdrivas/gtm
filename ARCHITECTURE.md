@@ -328,6 +328,8 @@ At server startup, JWKS keys are fetched from `https://{AUTH0_DOMAIN}/.well-know
 
 The first user to log in is auto-assigned the `admin` role.
 
+> **Invite-only access:** Public sign-ups are disabled in Auth0 (Database → Username-Password-Authentication → Disable Sign Ups = ON). New users must be created manually in the Auth0 dashboard under User Management → Users.
+
 ### 5.4 Request Flow (HTTP)
 
 ```

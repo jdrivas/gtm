@@ -52,6 +52,63 @@ export interface GameTicketDetail {
   seat: string;
   status: string;
   notes: string | null;
+  assigned_to: number | null;
+}
+
+export interface TicketRequest {
+  id: number;
+  user_id: number;
+  game_pk: number;
+  seats_requested: number;
+  seats_approved: number;
+  status: string;
+  notes: string | null;
+}
+
+export interface AllocationSummaryRow {
+  game_pk: number;
+  official_date: string;
+  away_team_name: string;
+  total_seats: number;
+  assigned: number;
+  available: number;
+  total_requested: number;
+  oversubscribed: boolean;
+}
+
+export interface GameTicketWithUser {
+  id: number;
+  seat_id: number;
+  section: string;
+  row: string;
+  seat: string;
+  status: string;
+  assigned_to: number | null;
+  assigned_user_name: string | null;
+}
+
+export interface RequestWithUser {
+  id: number;
+  user_id: number;
+  user_name: string;
+  seats_requested: number;
+  seats_approved: number;
+  status: string;
+  notes: string | null;
+}
+
+export interface GameAllocationDetail {
+  game: Game;
+  tickets: GameTicketWithUser[];
+  requests: RequestWithUser[];
+}
+
+export interface User {
+  id: number;
+  auth0_sub: string;
+  email: string;
+  name: string;
+  role: string;
 }
 
 export interface Promotion {

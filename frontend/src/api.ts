@@ -1,4 +1,4 @@
-import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary } from './types';
+import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, User } from './types';
 
 // --- Auth-aware fetch ---
 
@@ -82,5 +82,118 @@ export async function updateSeatGroupNotes(section: string, row: string, notes: 
 export async function fetchSeats(): Promise<Seat[]> {
   const res = await authFetch('/api/seats');
   if (!res.ok) throw new Error(`Failed to fetch seats: ${res.statusText}`);
+  return res.json();
+}
+
+// --- User ---
+
+export async function fetchMe(): Promise<User> {
+  const res = await authFetch('/api/users/me');
+  if (!res.ok) throw new Error(`Failed to fetch user: ${res.statusText}`);
+  return res.json();
+}
+
+// --- Ticket Requests ---
+
+export async function fetchMyRequests(): Promise<TicketRequest[]> {
+  const res = await authFetch('/api/my/requests');
+  if (!res.ok) throw new Error(`Failed to fetch requests: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createRequests(requests: { game_pk: number; seats_requested: number; notes?: string }[]): Promise<TicketRequest[]> {
+  const res = await authFetch('/api/my/requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+export async function updateRequest(requestId: number, seatsRequested: number): Promise<void> {
+  const res = await authFetch(`/api/my/requests/${requestId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seats_requested: seatsRequested }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+}
+
+export async function withdrawRequest(requestId: number): Promise<void> {
+  const res = await authFetch(`/api/my/requests/${requestId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+}
+
+// --- My Games ---
+
+export async function fetchMyGames(): Promise<GameTicketDetail[]> {
+  const res = await authFetch('/api/my/games');
+  if (!res.ok) throw new Error(`Failed to fetch my games: ${res.statusText}`);
+  return res.json();
+}
+
+export async function releaseGameTickets(gamePk: number): Promise<{ released: number }> {
+  const res = await authFetch(`/api/my/games/${gamePk}/release`, { method: 'POST' });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+// --- Admin: Allocation ---
+
+export async function fetchAllocationSummary(): Promise<AllocationSummaryRow[]> {
+  const res = await authFetch('/api/admin/allocation');
+  if (!res.ok) throw new Error(`Failed to fetch allocation: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchGameAllocation(gamePk: number): Promise<GameAllocationDetail> {
+  const res = await authFetch(`/api/admin/allocation/${gamePk}`);
+  if (!res.ok) throw new Error(`Failed to fetch game allocation: ${res.statusText}`);
+  return res.json();
+}
+
+export async function allocateTickets(assignments: { game_ticket_id: number; user_id: number; request_id?: number }[]): Promise<{ assigned: number }> {
+  const res = await authFetch('/api/admin/allocate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assignments }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+export async function revokeTicket(gameTicketId: number): Promise<void> {
+  const res = await authFetch(`/api/admin/allocate/${gameTicketId}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+}
+
+export async function fetchAllocationByUser(userId: number): Promise<GameTicketDetail[]> {
+  const res = await authFetch(`/api/admin/allocation/by-user/${userId}`);
+  if (!res.ok) throw new Error(`Failed to fetch user allocation: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchAdminRequests(): Promise<TicketRequest[]> {
+  const res = await authFetch('/api/admin/requests');
+  if (!res.ok) throw new Error(`Failed to fetch admin requests: ${res.statusText}`);
   return res.json();
 }

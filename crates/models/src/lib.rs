@@ -65,6 +65,7 @@ pub struct GameTicket {
     pub seat_id: i64,
     pub status: String,
     pub notes: Option<String>,
+    pub assigned_to: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -84,6 +85,18 @@ pub struct GameTicketDetail {
     pub section: String,
     pub row: String,
     pub seat: String,
+    pub status: String,
+    pub notes: Option<String>,
+    pub assigned_to: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct TicketRequest {
+    pub id: i64,
+    pub user_id: i64,
+    pub game_pk: i64,
+    pub seats_requested: i64,
+    pub seats_approved: i64,
     pub status: String,
     pub notes: Option<String>,
 }
