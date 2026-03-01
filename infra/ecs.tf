@@ -97,6 +97,7 @@ resource "aws_ecs_task_definition" "gtm" {
       { name = "GTM_PORT", value = tostring(var.container_port) },
       { name = "GTM_LOG_LEVEL", value = "info" },
       { name = "GTM_UTC", value = "true" },
+      { name = "GTM_LOG_JSON", value = "true" },
       { name = "GTM_DB_URL", value = local.db_url },
     ]
 

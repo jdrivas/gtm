@@ -112,7 +112,19 @@ enum Commands {
 fn init_logging(config: &gtm_config::Config) {
     let filter = EnvFilter::new(&config.log_level);
 
-    if config.utc {
+    if config.log_json {
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .json()
+            .with_target(true)
+            .with_timer(OffsetTime::new(
+                time::UtcOffset::UTC,
+                time::macros::format_description!(
+                    "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z"
+                ),
+            ))
+            .init();
+    } else if config.utc {
         tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_timer(OffsetTime::new(
