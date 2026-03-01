@@ -71,7 +71,7 @@ resource "aws_security_group" "ecs_tasks" {
 # --- ECS Task Definition ---
 
 locals {
-  db_url = "postgres://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.endpoint}/${var.db_name}"
+  db_url = "postgres://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.endpoint}/${var.db_name}?sslmode=require"
 }
 
 resource "aws_ecs_task_definition" "gtm" {
@@ -135,9 +135,9 @@ resource "aws_ecs_service" "gtm" {
   enable_execute_command = true
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
