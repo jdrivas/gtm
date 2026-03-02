@@ -197,3 +197,16 @@ export async function fetchAdminRequests(): Promise<TicketRequest[]> {
   if (!res.ok) throw new Error(`Failed to fetch admin requests: ${res.statusText}`);
   return res.json();
 }
+
+export async function scrapeSchedule(season?: number): Promise<{ games: number; promotions: number; tickets: number }> {
+  const res = await authFetch('/api/admin/scrape-schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ season: season ?? null }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}

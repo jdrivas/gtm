@@ -1,12 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { Ticket } from 'lucide-react';
+import { Ticket, RefreshCw } from 'lucide-react';
 import type { Game, TicketSummary, TicketRequest } from './types';
-import { fetchGames, fetchTicketSummary, fetchMyRequests } from './api';
+import { fetchGames, fetchTicketSummary, fetchMyRequests, scrapeSchedule } from './api';
 import ScheduleTable from './ScheduleTable';
 import RequestPanel from './RequestPanel';
 
-export default function SchedulePage() {
+interface SchedulePageProps {
+  userRole: string | null;
+}
+
+export default function SchedulePage({ userRole }: SchedulePageProps) {
   const { isAuthenticated } = useAuth0();
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +19,8 @@ export default function SchedulePage() {
   const [ticketSummary, setTicketSummary] = useState<Record<number, TicketSummary>>({});
   const [showRequestPanel, setShowRequestPanel] = useState(false);
   const [myRequests, setMyRequests] = useState<TicketRequest[]>([]);
+  const [scraping, setScraping] = useState(false);
+  const [scrapeResult, setScrapeResult] = useState<string | null>(null);
 
   const loadData = () => {
     Promise.all([fetchGames(), fetchTicketSummary()])
@@ -83,7 +89,38 @@ export default function SchedulePage() {
   return (
     <div>
       {isAuthenticated && !showRequestPanel && (
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {userRole === 'admin' && (
+              <>
+                <button
+                  onClick={async () => {
+                    setScraping(true);
+                    setScrapeResult(null);
+                    try {
+                      const r = await scrapeSchedule();
+                      setScrapeResult(`Updated: ${r.games} games, ${r.promotions} promotions, ${r.tickets} tickets`);
+                      loadData();
+                    } catch (e: any) {
+                      setScrapeResult(`Error: ${e.message}`);
+                    } finally {
+                      setScraping(false);
+                    }
+                  }}
+                  disabled={scraping}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${scraping ? 'animate-spin' : ''}`} />
+                  {scraping ? 'Scraping…' : 'Scrape Schedule'}
+                </button>
+                {scrapeResult && (
+                  <span className={`text-xs ${scrapeResult.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                    {scrapeResult}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
           <button
             onClick={() => setShowRequestPanel(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium bg-orange-600 text-white hover:bg-orange-500 transition-colors"

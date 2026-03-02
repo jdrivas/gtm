@@ -167,7 +167,7 @@ function App() {
         {/* Main content */}
         <main className="max-w-[1600px] mx-auto px-6 py-6">
           <Routes>
-            <Route path="/" element={<SchedulePage />} />
+            <Route path="/" element={<SchedulePage userRole={userRole} />} />
             <Route path="/my/requests" element={<MyRequests />} />
             <Route path="/my/games" element={<MyGames />} />
             <Route path="/admin/seats" element={<SeatAdmin />} />
