@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
 import { CalendarDays, Armchair, LogIn, LogOut, Ticket, CalendarCheck, BarChart3, ShieldCheck } from 'lucide-react'
@@ -13,6 +13,9 @@ import GameAllocation from './GameAllocation'
 function App() {
   const { isAuthenticated, isLoading, user, loginWithRedirect, logout, getAccessTokenSilently } = useAuth0()
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [showVersion, setShowVersion] = useState(false)
+  const versionRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setTokenGetter(async () => {
@@ -32,6 +35,19 @@ function App() {
       .catch(() => setUserRole(null));
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    fetch('/api/health').then(r => r.json()).then(d => setAppVersion(d.version)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!showVersion) return;
+    const handler = (e: MouseEvent) => {
+      if (versionRef.current && !versionRef.current.contains(e.target as Node)) setShowVersion(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showVersion]);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-black text-white">
@@ -39,8 +55,18 @@ function App() {
         <header className="border-b border-gray-800 bg-gray-950">
           <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-black font-black text-lg">
-                SF
+              <div ref={versionRef} className="relative">
+                <div
+                  onClick={() => setShowVersion(!showVersion)}
+                  className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-black font-black text-lg cursor-pointer select-none hover:bg-orange-400 transition-colors"
+                >
+                  SF
+                </div>
+                {showVersion && appVersion && (
+                  <div className="absolute top-12 left-0 z-50 px-3 py-1.5 rounded bg-gray-800 border border-gray-700 shadow-lg whitespace-nowrap">
+                    <span className="text-xs text-gray-400">v{appVersion}</span>
+                  </div>
+                )}
               </div>
               <div>
                 <h1 className="text-xl font-bold text-orange-500">
