@@ -2,39 +2,47 @@
 
 ## Overview
 
-A Rust-based application for managing SF Giants season tickets and monitoring the team schedule. The system consists of an Axum HTTP server, a CLI tool, and a React SPA frontend. It uses SQLite for local development and targets AWS RDS PostgreSQL for production, deployed on Kubernetes (EKS).
+A Rust-based application for managing SF Giants season tickets and monitoring the team schedule. The system consists of an Axum HTTP server, a CLI tool, and a React SPA frontend. It uses SQLite for local development and PostgreSQL (RDS) for production, deployed on AWS ECS Fargate with Terraform-managed infrastructure.
 
 ## Project Structure
 
 ```
 gtm/
 ├── Cargo.toml                  # Workspace root
-├── .gitignore
-├── README.md
+├── Dockerfile                  # Slim: frontend build + pre-built binary (no Rust compile)
+├── Makefile                    # All deploy ops: build, push, deploy, release, etc.
+├── CHANGELOG.md                # Keep a Changelog format, drives GitHub Release notes
 ├── PLAN.md                     # This file
-├── Dockerfile
-├── k8s/                        # Kubernetes manifests (future)
-├── migrations/                 # SQL migrations (shared between SQLite/Postgres)
+├── README.md
+├── .github/workflows/          # CI (check/test), Deploy (Docker → ECR → ECS), Release (binary)
 ├── crates/
 │   ├── app/                    # Unified binary: HTTP server + CLI (Axum, Clap)
-│   ├── db/                     # Database layer (SQLx — SQLite dev / Postgres prod)
+│   ├── config/                 # Layered config: defaults → file → env → CLI
+│   ├── db/                     # Database layer (SQLx AnyPool — SQLite dev / Postgres prod)
 │   ├── models/                 # Shared domain models
 │   └── scraper/                # MLB Stats API schedule fetcher
-└── frontend/                   # React SPA (Vite + TypeScript + TailwindCSS)
+├── frontend/                   # React SPA (Vite + TypeScript + TailwindCSS)
+├── infra/                      # Terraform (VPC, ECS, RDS, ALB, Secrets Manager, IAM)
+├── docs/                       # auth.md, etc.
+├── migrations/                 # SQL migrations — Postgres dialect (staging/prod)
+└── migrations-sqlite/          # SQL migrations — SQLite dialect (local dev)
 ```
 
 ## Technology Stack
 
-| Layer      | Technology                                              |
-|------------|---------------------------------------------------------|
-| Server     | Axum, Tokio, tower-http (static file serving)           |
-| CLI        | Clap (derive)                                           |
-| Database   | SQLx (SQLite feature for dev, Postgres feature for prod)|
-| Scraper    | reqwest + serde_json (MLB Stats API — JSON, no HTML)    |
-| Frontend   | React 18, Vite, TypeScript, TailwindCSS, React Router   |
-| Container  | Multi-stage Dockerfile                                  |
-| Orchestration | Kubernetes (AWS EKS)                                 |
-| CI/CD      | TBD                                                     |
+| Layer         | Technology                                              |
+|---------------|---------------------------------------------------------|
+| Server        | Axum, Tokio, tower-http (static file serving)           |
+| CLI           | Clap (derive)                                           |
+| Database      | SQLx AnyPool (SQLite for local dev, Postgres for prod)  |
+| Auth          | Auth0 (JWT), jsonwebtoken crate, JWKS validation        |
+| Scraper       | reqwest + serde_json (MLB Stats API — JSON, no HTML)    |
+| Frontend      | React 18, Vite, TypeScript, TailwindCSS, React Router   |
+| Container     | Multi-stage Dockerfile (pre-built binary + frontend)    |
+| Orchestration | AWS ECS Fargate                                         |
+| Infrastructure| Terraform (VPC, RDS, ALB, ECS, Secrets Manager, IAM)    |
+| CI/CD         | GitHub Actions (CI, Deploy, Release)                    |
+| Releases      | GitHub Releases (pre-built linux/amd64 binary)          |
 
 ## Data Source
 
@@ -46,37 +54,77 @@ Team ID `137` = San Francisco Giants.
 
 ## Domain Models
 
-| Entity   | Key Fields                                                              |
-|----------|-------------------------------------------------------------------------|
-| Game     | id, date, time, opponent, home_away, venue, result (nullable)           |
-| Ticket   | id, game_id (FK), section, row, seat, cost, status, holder_notes        |
+| Entity         | Key Fields                                                                  |
+|----------------|-----------------------------------------------------------------------------|
+| Game           | game_pk, official_date, game_time, home_team, away_team, venue, status      |
+| Promotion      | id, game_pk (FK), name                                                      |
+| Seat           | id, section, row, seat, notes                                               |
+| GameTicket     | id, game_pk (FK), seat_id (FK), status, notes, assigned_to (FK → users)     |
+| User           | id, auth0_sub, email, name (roles come from JWT, not stored)                |
+| TicketRequest  | id, user_id (FK), game_pk, seats_requested, seats_approved, status, notes   |
 
 ## API Endpoints
 
-| Method  | Path               | Description                          |
-|---------|---------------------|--------------------------------------|
-| GET     | /api/health         | Health check / hello world           |
-| GET     | /api/games          | List games (filterable by date range)|
-| GET     | /api/games/:id      | Game details                         |
-| GET     | /api/tickets        | List all tickets                     |
-| POST    | /api/tickets        | Add a ticket                         |
-| PATCH   | /api/tickets/:id    | Update ticket status/notes           |
-| DELETE  | /api/tickets/:id    | Remove a ticket                      |
-| GET     | /*                  | Serve React SPA (fallback)           |
+**Public**
+
+| Method | Path                      | Description                        |
+|--------|---------------------------|------------------------------------|
+| GET    | /api/health               | Health check + version string      |
+
+**Auth-required (any logged-in user)**
+
+| Method | Path                              | Description                             |
+|--------|-----------------------------------|-----------------------------------------|
+| GET    | /api/games                        | List games (optional `?month=` filter)  |
+| GET    | /api/games/{id}                   | Game details                            |
+| GET    | /api/games/{id}/promotions        | Promotions for a game                   |
+| GET    | /api/games/{id}/tickets           | Tickets for a game                      |
+| GET    | /api/seats                        | List all seats                          |
+| GET    | /api/tickets/summary              | Ticket availability summary per game    |
+| PATCH  | /api/tickets/{id}                 | Update ticket status/notes              |
+| GET    | /api/users/me                     | Current user info (auto-provision)      |
+| GET    | /api/users                        | List all users                          |
+| GET    | /api/my/requests                  | My ticket requests                      |
+| POST   | /api/my/requests                  | Create a ticket request                 |
+| PATCH  | /api/my/requests/{id}             | Update my request                       |
+| DELETE | /api/my/requests/{id}             | Withdraw my request                     |
+| GET    | /api/my/games                     | My allocated tickets                    |
+| POST   | /api/my/games/{game_pk}/release   | Release an allocated ticket             |
+
+**Admin-only**
+
+| Method | Path                                    | Description                         |
+|--------|-----------------------------------------|-------------------------------------|
+| POST   | /api/seats                              | Add a seat                          |
+| POST   | /api/seats/batch                        | Add multiple seats                  |
+| PATCH  | /api/seats/group                        | Update seat group                   |
+| DELETE | /api/seats/{id}                         | Delete a seat                       |
+| POST   | /api/admin/scrape-schedule              | Trigger schedule scrape             |
+| GET    | /api/admin/allocation                   | Allocation summary (all games)      |
+| GET    | /api/admin/allocation/{game_pk}         | Allocation detail for a game        |
+| GET    | /api/admin/allocation/by-user/{user_id} | Allocation detail for a user        |
+| POST   | /api/admin/allocate                     | Assign tickets to a user            |
+| DELETE | /api/admin/allocate/{id}                | Revoke a ticket assignment          |
+| GET    | /api/admin/requests                     | All ticket requests                 |
+
+**SPA fallback:** `GET /*` — serves `index.html` with injected runtime config
 
 ## CLI Commands
 
 All commands are subcommands of the single `gtm` binary. Global options (`--log-level`, `--utc`) go before the subcommand.
 
 ```
-gtm serve                    # Start HTTP server (default port 3000)
-gtm serve --port 8080        # Start on custom port
-gtm scrape-schedule          # Fetch & populate games from MLB Stats API
-gtm list-games [--month X]   # Print upcoming games
-gtm list-tickets             # Print ticket inventory
-gtm add-ticket ...           # Add a ticket interactively or via flags
-gtm --log-level debug serve  # Example: debug logging with serve
-gtm --utc serve              # Example: UTC timestamps
+gtm serve                                  # Start HTTP server (default port 3000)
+gtm serve --port 8080                      # Start on custom port
+gtm scrape-schedule [--season 2026]        # Fetch & populate games + promotions from MLB Stats API
+gtm list-games [--month 4]                 # Print upcoming games
+gtm add-seat --section VR313 --row A --seat 1  # Register a season ticket seat
+gtm list-seats                             # Print registered seats
+gtm list-tickets                           # Print ticket inventory per game
+gtm generate-tickets                       # Generate game_tickets for all seats × home games
+gtm hello                                  # Hello, Giants! 🏟️
+gtm --log-level debug serve                # Example: debug logging
+gtm --utc serve                            # Example: UTC timestamps
 ```
 
 ---
@@ -138,39 +186,72 @@ gtm --utc serve              # Example: UTC timestamps
 - [x] `POST /api/admin/scrape-schedule` endpoint (auth-protected, for remote triggering)
 - [x] CLI remains direct-DB by design (admin tool that works even when server is down)
 
-#### 2d-families: Family Grouping
-- [ ] `families` table migration + model + CRUD
-- [ ] Add `family_id` to `users` table
-- [ ] Admin UI: manage families, assign users to families
-- [ ] API: `GET/POST /api/families`, `PATCH /api/users/{id}` (set family)
+#### 2d-families: Family Grouping (deferred)
+Deferred — users request tickets directly (no family grouping needed yet).
 
-#### 2d-requests: Ticket Request Workflow
-- [ ] `ticket_requests` table migration + model
-- [ ] `POST /api/requests` — member creates request (family_id derived from user)
-- [ ] `GET /api/requests` — admin sees all; member sees own family's
-- [ ] Frontend: "Request Tickets" button on schedule, family request list
+#### 2d-requests: Ticket Request Workflow ✅
+- [x] `ticket_requests` table migration + model
+- [x] `POST /api/my/requests` — member creates request
+- [x] `GET /api/my/requests` — member sees own requests
+- [x] `PATCH /api/my/requests/{id}` — update request; `DELETE` — withdraw
+- [x] `GET /api/admin/requests` — admin sees all requests
+- [x] Frontend: request creation from schedule, My Requests page
 
-#### 2d-allocation: Admin Draft Board
-- [ ] `GET /api/allocation/games` — demand summary per game
-- [ ] `GET /api/allocation/games/{game_pk}` — all requests + assignments for a game
-- [ ] `POST /api/allocation/games/{game_pk}` — bulk-assign seats to families
-- [ ] Add `family_id` column to `game_tickets`
-- [ ] Frontend: allocation dashboard (oversubscription view, assign, finalize)
-- [ ] Post-allocation: waitlisted requests, admin reassign, voluntary release
-- [ ] `GET /api/my/games` — family's assigned tickets ("My Games" view)
+#### 2d-allocation: Admin Allocation ✅
+- [x] `GET /api/admin/allocation` — demand summary per game (oversubscription detection)
+- [x] `GET /api/admin/allocation/{game_pk}` — all requests + seat assignments for a game
+- [x] `GET /api/admin/allocation/by-user/{user_id}` — allocation detail per user
+- [x] `POST /api/admin/allocate` — assign tickets to users
+- [x] `DELETE /api/admin/allocate/{id}` — revoke assignment
+- [x] `assigned_to` column on `game_tickets` (FK → users)
+- [x] Frontend: AllocationDashboard, GameAllocation pages
+- [x] `GET /api/my/games` — member's allocated tickets ("My Games" view)
+- [x] `POST /api/my/games/{game_pk}/release` — member releases allocated ticket
 
-### Phase 3 — Frontend Build-Out
-- [ ] Schedule view page (calendar or list)
-- [ ] Ticket detail panel in expanded game row (show individual seats + statuses)
-- [ ] Ticket inventory page
-- [ ] Add/edit ticket form
-- [ ] Connect all pages to API
+### Phase 3 — Frontend Build-Out ✅
+- [x] Schedule page with game list, ticket availability badges, month filter
+- [x] Ticket detail panel in expanded game row (individual seats + statuses)
+- [x] Seat admin page (add/delete seats, batch add)
+- [x] My Requests page (create, update, withdraw ticket requests)
+- [x] My Games page (view allocated tickets, release back)
+- [x] Allocation Dashboard (admin: demand summary, oversubscription view)
+- [x] Game Allocation page (admin: assign/revoke seats per game)
+- [x] Auth-aware navigation (login/logout, admin badge, role-gated links)
+- [x] Version tooltip on SF logo (git hash from /api/health)
 
-### Phase 4 — Containerization & AWS Deployment
-- [ ] Multi-stage Dockerfile (build Rust + Vite, minimal runtime image)
-- [ ] Kubernetes manifests (Deployment, Service, ConfigMap/Secrets)
-- [ ] Switch DB feature flag to Postgres for release builds
-- [ ] AWS ECR for images, EKS for cluster
-- [ ] CI/CD pipeline (TBD)
-- [ ] **DB credentials via AWS IAM** — DB (Postgres/RDS) must not be exposed to public internet. Server runs in AWS VPC and authenticates to RDS using IAM credentials (not static passwords). The `Config` struct will need a new resolution path for AWS-managed secrets (e.g., IAM auth token, Secrets Manager, or env vars injected by EKS).
-- [ ] **CLI access post-deployment** — Determine best approach for admin CLI access to production DB (e.g., bastion host, SSM Session Manager, or a VPN into the VPC). Defer until deployment is underway.
+### Phase 4 — Containerization & AWS Deployment ✅
+- [x] Multi-stage Dockerfile (frontend build + pre-built binary, no Rust compile in Docker)
+- [x] SQLx AnyPool: runtime SQLite/Postgres detection via URL prefix
+- [x] Dual migration sets: `migrations/` (Postgres) + `migrations-sqlite/` (SQLite)
+- [x] Terraform infrastructure (`infra/`): VPC, public/private subnets, ALB, ECS Fargate, RDS Postgres, Secrets Manager, IAM, CloudWatch
+- [x] ECR for container images
+- [x] GitHub Actions CI (fmt, clippy, build, test) on every push
+- [x] GitHub Actions Deploy (Docker build → ECR push → ECS restart) on push to main
+- [x] DB credentials via AWS Secrets Manager (injected into ECS task as env vars)
+- [x] RDS in private subnets, not exposed to public internet
+- [x] NAT instance for private subnet egress (cost-optimized vs NAT Gateway)
+- [x] CLI access via SSM Session Manager port forwarding through NAT instance (documented in `infra/README.md`)
+- [x] Staging environment live: `staging-gtm.rivas-yee.com`
+- [x] DNS via Hover.com (manual CNAME records, not Route 53)
+
+### Phase 5 — Release Pipeline & Runtime Config ✅
+- [x] Runtime Auth0 config injection: server injects `window.__GTM_CONFIG__` into `index.html` at startup
+- [x] Frontend bundle is environment-agnostic (no build-time `VITE_AUTH0_*` vars)
+- [x] `auth0_client_id` added to config crate + Terraform Secrets Manager + ECS task definition
+- [x] Removed `VITE_AUTH0_*` from Dockerfile, Makefile, deploy.yml
+- [x] GitHub Releases workflow: tag push → CI + build → binary uploaded as release asset
+- [x] Dockerfile simplified: downloads pre-built binary, no Rust build stage (~1s Docker build)
+- [x] Makefile: `make release VERSION=v0.x.y` (tags + pushes), `make deploy` (download binary → Docker → ECR → ECS)
+- [x] CHANGELOG.md workflow: changelog-driven release notes, Makefile enforces update before tagging
+
+---
+
+## What's Next
+
+Open items for future work (not prioritized):
+
+- **Production environment** — `infra/environments/prod.tfvars` exists but prod is not deployed yet; image promotion from staging
+- **Family grouping** (2d-families) — group users into families for ticket allocation; deferred until needed
+- **Frontend polish** — mobile responsiveness, loading skeletons, error boundaries
+- **Monitoring** — CloudWatch alarms, uptime checks, error rate alerting
+- **README.md update** — README is stale; should reflect current deployment, API, and Makefile usage
