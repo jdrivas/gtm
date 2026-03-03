@@ -507,7 +507,7 @@ pub async fn allocation_summary(pool: &AnyPool) -> Result<Vec<(i64, i64, i64, i6
          FROM games g \
          JOIN game_tickets gt ON gt.game_pk = g.game_pk \
          WHERE g.home_team_name = ? \
-         GROUP BY g.game_pk \
+         GROUP BY g.game_pk, g.game_date \
          ORDER BY g.game_date");
     let rows = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(&sql)
     .bind(GIANTS_TEAM_NAME)
