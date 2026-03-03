@@ -179,6 +179,10 @@ pub async fn fetch_schedule(season: u32) -> Result<ScheduleData> {
         }
     }
 
-    info!("Fetched {} games, {} promotions for {season} season", games.len(), promotions.len());
+    info!(
+        "Fetched {} games, {} promotions for {season} season",
+        games.len(),
+        promotions.len()
+    );
     Ok(ScheduleData { games, promotions })
 }

@@ -59,7 +59,9 @@ pub async fn list_games(pool: &AnyPool, month: Option<u32>) -> Result<Vec<Game>>
     let games = match month {
         Some(m) => {
             let pattern = format!("%-{:02}-%", m);
-            let sql = pg(&format!("SELECT {GAME_COLUMNS} FROM games WHERE official_date LIKE ? ORDER BY game_date"));
+            let sql = pg(&format!(
+                "SELECT {GAME_COLUMNS} FROM games WHERE official_date LIKE ? ORDER BY game_date"
+            ));
             sqlx::query_as::<_, Game>(&sql)
                 .bind(pattern)
                 .fetch_all(pool)
@@ -67,16 +69,16 @@ pub async fn list_games(pool: &AnyPool, month: Option<u32>) -> Result<Vec<Game>>
         }
         None => {
             let sql = format!("SELECT {GAME_COLUMNS} FROM games ORDER BY game_date");
-            sqlx::query_as::<_, Game>(&sql)
-                .fetch_all(pool)
-                .await?
+            sqlx::query_as::<_, Game>(&sql).fetch_all(pool).await?
         }
     };
     Ok(games)
 }
 
 pub async fn get_game(pool: &AnyPool, game_pk: i64) -> Result<Option<Game>> {
-    let sql = pg(&format!("SELECT {GAME_COLUMNS} FROM games WHERE game_pk = ?"));
+    let sql = pg(&format!(
+        "SELECT {GAME_COLUMNS} FROM games WHERE game_pk = ?"
+    ));
     let game = sqlx::query_as::<_, Game>(&sql)
         .bind(game_pk)
         .fetch_optional(pool)
@@ -85,18 +87,21 @@ pub async fn get_game(pool: &AnyPool, game_pk: i64) -> Result<Option<Game>> {
 }
 
 pub async fn get_promotions_for_game(pool: &AnyPool, game_pk: i64) -> Result<Vec<Promotion>> {
-    let sql = pg("SELECT offer_id, game_pk, name, offer_type, description, distribution, \
+    let sql = pg(
+        "SELECT offer_id, game_pk, name, offer_type, description, distribution, \
             presented_by, alt_page_url, ticket_link, thumbnail_url, image_url, display_order \
-         FROM promotions WHERE game_pk = ? ORDER BY display_order");
+         FROM promotions WHERE game_pk = ? ORDER BY display_order",
+    );
     let promos = sqlx::query_as::<_, Promotion>(&sql)
-    .bind(game_pk)
-    .fetch_all(pool)
-    .await?;
+        .bind(game_pk)
+        .fetch_all(pool)
+        .await?;
     Ok(promos)
 }
 
 pub async fn upsert_promotion(pool: &AnyPool, promo: &Promotion) -> Result<()> {
-    let sql = pg("INSERT INTO promotions (offer_id, game_pk, name, offer_type, description, distribution, \
+    let sql = pg(
+        "INSERT INTO promotions (offer_id, game_pk, name, offer_type, description, distribution, \
             presented_by, alt_page_url, ticket_link, thumbnail_url, image_url, display_order) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT(offer_id, game_pk) DO UPDATE SET \
@@ -110,27 +115,29 @@ pub async fn upsert_promotion(pool: &AnyPool, promo: &Promotion) -> Result<()> {
             thumbnail_url = excluded.thumbnail_url, \
             image_url = excluded.image_url, \
             display_order = excluded.display_order, \
-            updated_at = CURRENT_TIMESTAMP");
+            updated_at = CURRENT_TIMESTAMP",
+    );
     sqlx::query(&sql)
-    .bind(promo.offer_id)
-    .bind(promo.game_pk)
-    .bind(&promo.name)
-    .bind(&promo.offer_type)
-    .bind(&promo.description)
-    .bind(&promo.distribution)
-    .bind(&promo.presented_by)
-    .bind(&promo.alt_page_url)
-    .bind(&promo.ticket_link)
-    .bind(&promo.thumbnail_url)
-    .bind(&promo.image_url)
-    .bind(promo.display_order)
-    .execute(pool)
-    .await?;
+        .bind(promo.offer_id)
+        .bind(promo.game_pk)
+        .bind(&promo.name)
+        .bind(&promo.offer_type)
+        .bind(&promo.description)
+        .bind(&promo.distribution)
+        .bind(&promo.presented_by)
+        .bind(&promo.alt_page_url)
+        .bind(&promo.ticket_link)
+        .bind(&promo.thumbnail_url)
+        .bind(&promo.image_url)
+        .bind(promo.display_order)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
 pub async fn upsert_game(pool: &AnyPool, game: &Game) -> Result<()> {
-    let sql = pg("INSERT INTO games (game_pk, game_guid, game_type, season, game_date, official_date, \
+    let sql = pg(
+        "INSERT INTO games (game_pk, game_guid, game_type, season, game_date, official_date, \
             status_abstract, status_detailed, status_code, start_time_tbd, \
             away_team_id, away_team_name, away_score, away_is_winner, \
             home_team_id, home_team_name, home_score, home_is_winner, \
@@ -151,53 +158,62 @@ pub async fn upsert_game(pool: &AnyPool, game: &Game) -> Result<()> {
             home_is_winner = excluded.home_is_winner, \
             day_night = excluded.day_night, \
             is_tie = excluded.is_tie, \
-            updated_at = CURRENT_TIMESTAMP");
+            updated_at = CURRENT_TIMESTAMP",
+    );
     sqlx::query(&sql)
-    .bind(game.game_pk)
-    .bind(&game.game_guid)
-    .bind(&game.game_type)
-    .bind(&game.season)
-    .bind(&game.game_date)
-    .bind(&game.official_date)
-    .bind(&game.status_abstract)
-    .bind(&game.status_detailed)
-    .bind(&game.status_code)
-    .bind(game.start_time_tbd)
-    .bind(game.away_team_id)
-    .bind(&game.away_team_name)
-    .bind(game.away_score)
-    .bind(game.away_is_winner)
-    .bind(game.home_team_id)
-    .bind(&game.home_team_name)
-    .bind(game.home_score)
-    .bind(game.home_is_winner)
-    .bind(game.venue_id)
-    .bind(&game.venue_name)
-    .bind(&game.day_night)
-    .bind(&game.series_description)
-    .bind(game.series_game_number)
-    .bind(game.games_in_series)
-    .bind(&game.double_header)
-    .bind(game.game_number)
-    .bind(game.scheduled_innings)
-    .bind(game.is_tie)
-    .execute(pool)
-    .await?;
+        .bind(game.game_pk)
+        .bind(&game.game_guid)
+        .bind(&game.game_type)
+        .bind(&game.season)
+        .bind(&game.game_date)
+        .bind(&game.official_date)
+        .bind(&game.status_abstract)
+        .bind(&game.status_detailed)
+        .bind(&game.status_code)
+        .bind(game.start_time_tbd)
+        .bind(game.away_team_id)
+        .bind(&game.away_team_name)
+        .bind(game.away_score)
+        .bind(game.away_is_winner)
+        .bind(game.home_team_id)
+        .bind(&game.home_team_name)
+        .bind(game.home_score)
+        .bind(game.home_is_winner)
+        .bind(game.venue_id)
+        .bind(&game.venue_name)
+        .bind(&game.day_night)
+        .bind(&game.series_description)
+        .bind(game.series_game_number)
+        .bind(game.games_in_series)
+        .bind(&game.double_header)
+        .bind(game.game_number)
+        .bind(game.scheduled_innings)
+        .bind(game.is_tie)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
 // --- Seats ---
 
-pub async fn add_seat(pool: &AnyPool, section: &str, row: &str, seat: &str, notes: Option<&str>) -> Result<Seat> {
-    let sql = pg("INSERT INTO seats (section, row, seat, notes) VALUES (?, ?, ?, ?) \
-         RETURNING id, section, row, seat, notes");
+pub async fn add_seat(
+    pool: &AnyPool,
+    section: &str,
+    row: &str,
+    seat: &str,
+    notes: Option<&str>,
+) -> Result<Seat> {
+    let sql = pg(
+        "INSERT INTO seats (section, row, seat, notes) VALUES (?, ?, ?, ?) \
+         RETURNING id, section, row, seat, notes",
+    );
     let result = sqlx::query_as::<_, Seat>(&sql)
-    .bind(section)
-    .bind(row)
-    .bind(seat)
-    .bind(notes)
-    .fetch_one(pool)
-    .await?;
+        .bind(section)
+        .bind(row)
+        .bind(seat)
+        .bind(notes)
+        .fetch_one(pool)
+        .await?;
     Ok(result)
 }
 
@@ -210,28 +226,29 @@ pub async fn list_seats(pool: &AnyPool) -> Result<Vec<Seat>> {
     Ok(seats)
 }
 
-pub async fn update_seat_group_notes(pool: &AnyPool, section: &str, row: &str, notes: Option<&str>) -> Result<u64> {
-    let sql = pg("UPDATE seats SET notes = ?, updated_at = CURRENT_TIMESTAMP WHERE section = ? AND row = ?");
+pub async fn update_seat_group_notes(
+    pool: &AnyPool,
+    section: &str,
+    row: &str,
+    notes: Option<&str>,
+) -> Result<u64> {
+    let sql = pg(
+        "UPDATE seats SET notes = ?, updated_at = CURRENT_TIMESTAMP WHERE section = ? AND row = ?",
+    );
     let result = sqlx::query(&sql)
-    .bind(notes)
-    .bind(section)
-    .bind(row)
-    .execute(pool)
-    .await?;
+        .bind(notes)
+        .bind(section)
+        .bind(row)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected())
 }
 
 pub async fn delete_seat(pool: &AnyPool, seat_id: i64) -> Result<bool> {
     let sql1 = pg("DELETE FROM game_tickets WHERE seat_id = ?");
-    sqlx::query(&sql1)
-        .bind(seat_id)
-        .execute(pool)
-        .await?;
+    sqlx::query(&sql1).bind(seat_id).execute(pool).await?;
     let sql2 = pg("DELETE FROM seats WHERE id = ?");
-    let result = sqlx::query(&sql2)
-        .bind(seat_id)
-        .execute(pool)
-        .await?;
+    let result = sqlx::query(&sql2).bind(seat_id).execute(pool).await?;
     Ok(result.rows_affected() > 0)
 }
 
@@ -244,10 +261,10 @@ pub async fn generate_tickets_for_seat(pool: &AnyPool, seat_id: i64) -> Result<u
          SELECT game_pk, ?, 'available' FROM games WHERE home_team_name = ? \
          ON CONFLICT DO NOTHING");
     let result = sqlx::query(&sql)
-    .bind(seat_id)
-    .bind(GIANTS_TEAM_NAME)
-    .execute(pool)
-    .await?;
+        .bind(seat_id)
+        .bind(GIANTS_TEAM_NAME)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected())
 }
 
@@ -258,33 +275,42 @@ pub async fn generate_tickets_for_all_seats(pool: &AnyPool) -> Result<u64> {
          WHERE g.home_team_name = ? \
          ON CONFLICT DO NOTHING");
     let result = sqlx::query(&sql)
-    .bind(GIANTS_TEAM_NAME)
-    .execute(pool)
-    .await?;
+        .bind(GIANTS_TEAM_NAME)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected())
 }
 
 pub async fn list_tickets_for_game(pool: &AnyPool, game_pk: i64) -> Result<Vec<GameTicketDetail>> {
-    let sql = pg("SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes, gt.assigned_to \
+    let sql = pg(
+        "SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes, gt.assigned_to \
          FROM game_tickets gt \
          JOIN seats s ON s.id = gt.seat_id \
          WHERE gt.game_pk = ? \
-         ORDER BY s.section, s.row, s.seat");
+         ORDER BY s.section, s.row, s.seat",
+    );
     let tickets = sqlx::query_as::<_, GameTicketDetail>(&sql)
-    .bind(game_pk)
-    .fetch_all(pool)
-    .await?;
+        .bind(game_pk)
+        .fetch_all(pool)
+        .await?;
     Ok(tickets)
 }
 
-pub async fn update_ticket_status(pool: &AnyPool, ticket_id: i64, status: &str, notes: Option<&str>) -> Result<bool> {
-    let sql = pg("UPDATE game_tickets SET status = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+pub async fn update_ticket_status(
+    pool: &AnyPool,
+    ticket_id: i64,
+    status: &str,
+    notes: Option<&str>,
+) -> Result<bool> {
+    let sql = pg(
+        "UPDATE game_tickets SET status = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    );
     let result = sqlx::query(&sql)
-    .bind(status)
-    .bind(notes)
-    .bind(ticket_id)
-    .execute(pool)
-    .await?;
+        .bind(status)
+        .bind(notes)
+        .bind(ticket_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
@@ -303,36 +329,37 @@ pub async fn ticket_summary_for_games(pool: &AnyPool) -> Result<Vec<(i64, i64, i
 // --- Users ---
 
 pub async fn upsert_user(pool: &AnyPool, auth0_sub: &str, email: &str, name: &str) -> Result<User> {
-    let sql = pg("INSERT INTO users (auth0_sub, email, name) VALUES (?, ?, ?) \
+    let sql = pg(
+        "INSERT INTO users (auth0_sub, email, name) VALUES (?, ?, ?) \
          ON CONFLICT(auth0_sub) DO UPDATE SET \
             email = excluded.email, \
             name = excluded.name, \
             updated_at = CURRENT_TIMESTAMP \
-         RETURNING id, auth0_sub, email, name");
+         RETURNING id, auth0_sub, email, name",
+    );
     let user = sqlx::query_as::<_, User>(&sql)
-    .bind(auth0_sub)
-    .bind(email)
-    .bind(name)
-    .fetch_one(pool)
-    .await?;
+        .bind(auth0_sub)
+        .bind(email)
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
     Ok(user)
 }
 
 pub async fn get_user_by_sub(pool: &AnyPool, auth0_sub: &str) -> Result<Option<User>> {
     let sql = pg("SELECT id, auth0_sub, email, name FROM users WHERE auth0_sub = ?");
     let user = sqlx::query_as::<_, User>(&sql)
-    .bind(auth0_sub)
-    .fetch_optional(pool)
-    .await?;
+        .bind(auth0_sub)
+        .fetch_optional(pool)
+        .await?;
     Ok(user)
 }
 
 pub async fn list_users(pool: &AnyPool) -> Result<Vec<User>> {
-    let users = sqlx::query_as::<_, User>(
-        "SELECT id, auth0_sub, email, name FROM users ORDER BY name",
-    )
-    .fetch_all(pool)
-    .await?;
+    let users =
+        sqlx::query_as::<_, User>("SELECT id, auth0_sub, email, name FROM users ORDER BY name")
+            .fetch_all(pool)
+            .await?;
     Ok(users)
 }
 
@@ -345,41 +372,47 @@ pub async fn create_ticket_request(
     seats_requested: i64,
     notes: Option<&str>,
 ) -> Result<TicketRequest> {
-    let sql = pg("INSERT INTO ticket_requests (user_id, game_pk, seats_requested, notes) \
+    let sql = pg(
+        "INSERT INTO ticket_requests (user_id, game_pk, seats_requested, notes) \
          VALUES (?, ?, ?, ?) \
          ON CONFLICT(user_id, game_pk) DO UPDATE SET \
             seats_requested = excluded.seats_requested, \
             notes = excluded.notes, \
             status = CASE WHEN ticket_requests.status = 'withdrawn' THEN 'pending' ELSE ticket_requests.status END, \
             updated_at = CURRENT_TIMESTAMP \
-         RETURNING id, user_id, game_pk, seats_requested, seats_approved, status, notes");
+         RETURNING id, user_id, game_pk, seats_requested, seats_approved, status, notes",
+    );
     let req = sqlx::query_as::<_, TicketRequest>(&sql)
-    .bind(user_id)
-    .bind(game_pk)
-    .bind(seats_requested)
-    .bind(notes)
-    .fetch_one(pool)
-    .await?;
+        .bind(user_id)
+        .bind(game_pk)
+        .bind(seats_requested)
+        .bind(notes)
+        .fetch_one(pool)
+        .await?;
     Ok(req)
 }
 
 pub async fn list_requests_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<TicketRequest>> {
-    let sql = pg("SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
-         FROM ticket_requests WHERE user_id = ? ORDER BY game_pk");
+    let sql = pg(
+        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+         FROM ticket_requests WHERE user_id = ? ORDER BY game_pk",
+    );
     let reqs = sqlx::query_as::<_, TicketRequest>(&sql)
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
     Ok(reqs)
 }
 
 pub async fn list_requests_for_game(pool: &AnyPool, game_pk: i64) -> Result<Vec<TicketRequest>> {
-    let sql = pg("SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
-         FROM ticket_requests WHERE game_pk = ? ORDER BY created_at");
+    let sql = pg(
+        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+         FROM ticket_requests WHERE game_pk = ? ORDER BY created_at",
+    );
     let reqs = sqlx::query_as::<_, TicketRequest>(&sql)
-    .bind(game_pk)
-    .fetch_all(pool)
-    .await?;
+        .bind(game_pk)
+        .fetch_all(pool)
+        .await?;
     Ok(reqs)
 }
 
@@ -399,67 +432,70 @@ pub async fn update_ticket_request(
     user_id: i64,
     seats_requested: i64,
 ) -> Result<bool> {
-    let sql = pg("UPDATE ticket_requests SET seats_requested = ?, updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ? AND user_id = ? AND status = 'pending'");
+    let sql = pg(
+        "UPDATE ticket_requests SET seats_requested = ?, updated_at = CURRENT_TIMESTAMP \
+         WHERE id = ? AND user_id = ? AND status = 'pending'",
+    );
     let result = sqlx::query(&sql)
-    .bind(seats_requested)
-    .bind(request_id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+        .bind(seats_requested)
+        .bind(request_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn withdraw_ticket_request(pool: &AnyPool, request_id: i64, user_id: i64) -> Result<bool> {
-    let sql = pg("UPDATE ticket_requests SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ? AND user_id = ? AND status = 'pending'");
+pub async fn withdraw_ticket_request(
+    pool: &AnyPool,
+    request_id: i64,
+    user_id: i64,
+) -> Result<bool> {
+    let sql = pg(
+        "UPDATE ticket_requests SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP \
+         WHERE id = ? AND user_id = ? AND status = 'pending'",
+    );
     let result = sqlx::query(&sql)
-    .bind(request_id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+        .bind(request_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
 // --- Allocation ---
 
-pub async fn assign_ticket(
-    pool: &AnyPool,
-    game_ticket_id: i64,
-    user_id: i64,
-) -> Result<bool> {
-    let sql = pg("UPDATE game_tickets SET assigned_to = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ? AND status = 'available'");
+pub async fn assign_ticket(pool: &AnyPool, game_ticket_id: i64, user_id: i64) -> Result<bool> {
+    let sql = pg(
+        "UPDATE game_tickets SET assigned_to = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP \
+         WHERE id = ? AND status = 'available'",
+    );
     let result = sqlx::query(&sql)
-    .bind(user_id)
-    .bind(game_ticket_id)
-    .execute(pool)
-    .await?;
+        .bind(user_id)
+        .bind(game_ticket_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
 pub async fn revoke_ticket(pool: &AnyPool, game_ticket_id: i64) -> Result<bool> {
-    let sql = pg("UPDATE game_tickets SET assigned_to = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ? AND status = 'assigned'");
-    let result = sqlx::query(&sql)
-    .bind(game_ticket_id)
-    .execute(pool)
-    .await?;
+    let sql = pg(
+        "UPDATE game_tickets SET assigned_to = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP \
+         WHERE id = ? AND status = 'assigned'",
+    );
+    let result = sqlx::query(&sql).bind(game_ticket_id).execute(pool).await?;
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn release_tickets_for_game(
-    pool: &AnyPool,
-    game_pk: i64,
-    user_id: i64,
-) -> Result<u64> {
-    let sql = pg("UPDATE game_tickets SET assigned_to = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP \
-         WHERE game_pk = ? AND assigned_to = ?");
+pub async fn release_tickets_for_game(pool: &AnyPool, game_pk: i64, user_id: i64) -> Result<u64> {
+    let sql = pg(
+        "UPDATE game_tickets SET assigned_to = NULL, status = 'available', updated_at = CURRENT_TIMESTAMP \
+         WHERE game_pk = ? AND assigned_to = ?",
+    );
     let result = sqlx::query(&sql)
-    .bind(game_pk)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+        .bind(game_pk)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected())
 }
 
@@ -469,27 +505,31 @@ pub async fn update_request_approval(
     seats_approved: i64,
     status: &str,
 ) -> Result<bool> {
-    let sql = pg("UPDATE ticket_requests SET seats_approved = seats_approved + ?, status = ?, updated_at = CURRENT_TIMESTAMP \
-         WHERE id = ?");
+    let sql = pg(
+        "UPDATE ticket_requests SET seats_approved = seats_approved + ?, status = ?, updated_at = CURRENT_TIMESTAMP \
+         WHERE id = ?",
+    );
     let result = sqlx::query(&sql)
-    .bind(seats_approved)
-    .bind(status)
-    .bind(request_id)
-    .execute(pool)
-    .await?;
+        .bind(seats_approved)
+        .bind(status)
+        .bind(request_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
 pub async fn list_tickets_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<GameTicketDetail>> {
-    let sql = pg("SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes, gt.assigned_to \
+    let sql = pg(
+        "SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes, gt.assigned_to \
          FROM game_tickets gt \
          JOIN seats s ON s.id = gt.seat_id \
          WHERE gt.assigned_to = ? \
-         ORDER BY gt.game_pk, s.section, s.row, s.seat");
+         ORDER BY gt.game_pk, s.section, s.row, s.seat",
+    );
     let tickets = sqlx::query_as::<_, GameTicketDetail>(&sql)
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
     Ok(tickets)
 }
 
@@ -510,8 +550,8 @@ pub async fn allocation_summary(pool: &AnyPool) -> Result<Vec<(i64, i64, i64, i6
          GROUP BY g.game_pk, g.game_date \
          ORDER BY g.game_date");
     let rows = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(&sql)
-    .bind(GIANTS_TEAM_NAME)
-    .fetch_all(pool)
-    .await?;
+        .bind(GIANTS_TEAM_NAME)
+        .fetch_all(pool)
+        .await?;
     Ok(rows)
 }

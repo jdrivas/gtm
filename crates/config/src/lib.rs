@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::Deserialize;
+use std::path::PathBuf;
 
 /// All configuration for the GTM application.
 ///
@@ -22,7 +22,6 @@ pub struct Config {
     pub auth0_domain: String,
     pub auth0_client_id: String,
     pub auth0_audience: String,
-
 }
 
 /// Config file layout (~/.gtm/config.toml). All fields optional — they layer
@@ -86,30 +85,58 @@ impl Config {
     }
 
     fn apply_file(&mut self, file: FileConfig) {
-        if let Some(v) = file.db_url { self.db_url = v; }
-        if let Some(v) = file.port { self.port = v; }
-        if let Some(v) = file.log_level { self.log_level = v; }
-        if let Some(v) = file.utc { self.utc = v; }
-        if let Some(v) = file.log_json { self.log_json = v; }
-        if let Some(v) = file.auth0_domain { self.auth0_domain = v; }
-        if let Some(v) = file.auth0_client_id { self.auth0_client_id = v; }
-        if let Some(v) = file.auth0_audience { self.auth0_audience = v; }
+        if let Some(v) = file.db_url {
+            self.db_url = v;
+        }
+        if let Some(v) = file.port {
+            self.port = v;
+        }
+        if let Some(v) = file.log_level {
+            self.log_level = v;
+        }
+        if let Some(v) = file.utc {
+            self.utc = v;
+        }
+        if let Some(v) = file.log_json {
+            self.log_json = v;
+        }
+        if let Some(v) = file.auth0_domain {
+            self.auth0_domain = v;
+        }
+        if let Some(v) = file.auth0_client_id {
+            self.auth0_client_id = v;
+        }
+        if let Some(v) = file.auth0_audience {
+            self.auth0_audience = v;
+        }
     }
 
     fn apply_env(&mut self) {
-        if let Ok(v) = std::env::var("GTM_DB_URL") { self.db_url = v; }
-        if let Ok(v) = std::env::var("GTM_PORT") {
-            if let Ok(p) = v.parse() { self.port = p; }
+        if let Ok(v) = std::env::var("GTM_DB_URL") {
+            self.db_url = v;
         }
-        if let Ok(v) = std::env::var("GTM_LOG_LEVEL") { self.log_level = v; }
+        if let Ok(v) = std::env::var("GTM_PORT") {
+            if let Ok(p) = v.parse() {
+                self.port = p;
+            }
+        }
+        if let Ok(v) = std::env::var("GTM_LOG_LEVEL") {
+            self.log_level = v;
+        }
         if let Ok(v) = std::env::var("GTM_UTC") {
             self.utc = v == "1" || v.eq_ignore_ascii_case("true");
         }
         if let Ok(v) = std::env::var("GTM_LOG_JSON") {
             self.log_json = v == "1" || v.eq_ignore_ascii_case("true");
         }
-        if let Ok(v) = std::env::var("AUTH0_DOMAIN") { self.auth0_domain = v; }
-        if let Ok(v) = std::env::var("AUTH0_CLIENT_ID") { self.auth0_client_id = v; }
-        if let Ok(v) = std::env::var("AUTH0_AUDIENCE") { self.auth0_audience = v; }
+        if let Ok(v) = std::env::var("AUTH0_DOMAIN") {
+            self.auth0_domain = v;
+        }
+        if let Ok(v) = std::env::var("AUTH0_CLIENT_ID") {
+            self.auth0_client_id = v;
+        }
+        if let Ok(v) = std::env::var("AUTH0_AUDIENCE") {
+            self.auth0_audience = v;
+        }
     }
 }

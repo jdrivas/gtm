@@ -1,8 +1,12 @@
-use axum::{Router, extract::{FromRef, FromRequestParts, Path, Query, State}, routing::{delete, get, patch, post}, Json};
 use axum::http::{StatusCode, request::Parts};
+use axum::{
+    Json, Router,
+    extract::{FromRef, FromRequestParts, Path, Query, State},
+    routing::{delete, get, patch, post},
+};
 use chrono::{Datelike, Local};
 use clap::{Parser, Subcommand, ValueEnum};
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::AnyPool;
@@ -237,31 +241,46 @@ where
             .headers
             .get("authorization")
             .and_then(|v| v.to_str().ok())
-            .ok_or((StatusCode::UNAUTHORIZED, "Missing Authorization header".to_string()))?;
+            .ok_or((
+                StatusCode::UNAUTHORIZED,
+                "Missing Authorization header".to_string(),
+            ))?;
 
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or((StatusCode::UNAUTHORIZED, "Invalid Authorization header format".to_string()))?;
+        let token = auth_header.strip_prefix("Bearer ").ok_or((
+            StatusCode::UNAUTHORIZED,
+            "Invalid Authorization header format".to_string(),
+        ))?;
 
         // Decode header to get kid
-        let header = decode_header(token)
-            .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Invalid token header: {e}")))?;
+        let header = decode_header(token).map_err(|e| {
+            (
+                StatusCode::UNAUTHORIZED,
+                format!("Invalid token header: {e}"),
+            )
+        })?;
 
-        let kid = header.kid
+        let kid = header
+            .kid
             .ok_or((StatusCode::UNAUTHORIZED, "Token missing kid".to_string()))?;
 
         // Find matching key
-        let jwk_key = auth_config.jwks_keys.iter()
-            .find(|k| k.kid == kid)
-            .ok_or((StatusCode::UNAUTHORIZED, "No matching JWK for kid".to_string()))?;
+        let jwk_key = auth_config.jwks_keys.iter().find(|k| k.kid == kid).ok_or((
+            StatusCode::UNAUTHORIZED,
+            "No matching JWK for kid".to_string(),
+        ))?;
 
         // Validate token
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_audience(&[&auth_config.audience]);
         validation.set_issuer(&[&auth_config.issuer]);
 
-        let token_data = decode::<Claims>(token, &jwk_key.decoding_key, &validation)
-            .map_err(|e| (StatusCode::UNAUTHORIZED, format!("Token validation failed: {e}")))?;
+        let token_data =
+            decode::<Claims>(token, &jwk_key.decoding_key, &validation).map_err(|e| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    format!("Token validation failed: {e}"),
+                )
+            })?;
 
         Ok(AuthUser {
             sub: token_data.claims.sub,
@@ -309,7 +328,10 @@ async fn api_get_game(
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     match gtm_db::get_game(&pool, game_pk).await {
         Ok(Some(game)) => Ok(Json(serde_json::to_value(game).unwrap())),
-        Ok(None) => Err((axum::http::StatusCode::NOT_FOUND, "Game not found".to_string())),
+        Ok(None) => Err((
+            axum::http::StatusCode::NOT_FOUND,
+            "Game not found".to_string(),
+        )),
         Err(e) => Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     }
 }
@@ -336,9 +358,15 @@ async fn api_add_seat(
     State(pool): State<AnyPool>,
     Json(body): Json<AddSeatRequest>,
 ) -> Result<Json<gtm_models::Seat>, (axum::http::StatusCode, String)> {
-    let seat = gtm_db::add_seat(&pool, &body.section, &body.row, &body.seat, body.notes.as_deref())
-        .await
-        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+    let seat = gtm_db::add_seat(
+        &pool,
+        &body.section,
+        &body.row,
+        &body.seat,
+        body.notes.as_deref(),
+    )
+    .await
+    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
     let count = gtm_db::generate_tickets_for_seat(&pool, seat.id)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -369,22 +397,41 @@ async fn api_add_seat_batch(
     Json(body): Json<AddSeatBatchRequest>,
 ) -> Result<Json<Vec<gtm_models::Seat>>, (axum::http::StatusCode, String)> {
     if body.seat_start > body.seat_end {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "seat_start must be <= seat_end".to_string()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "seat_start must be <= seat_end".to_string(),
+        ));
     }
     if body.seat_end - body.seat_start >= 50 {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "Maximum 50 seats per batch".to_string()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "Maximum 50 seats per batch".to_string(),
+        ));
     }
     let mut seats = Vec::new();
     for n in body.seat_start..=body.seat_end {
-        let seat = gtm_db::add_seat(&pool, &body.section, &body.row, &n.to_string(), body.notes.as_deref())
-            .await
-            .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
+        let seat = gtm_db::add_seat(
+            &pool,
+            &body.section,
+            &body.row,
+            &n.to_string(),
+            body.notes.as_deref(),
+        )
+        .await
+        .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))?;
         gtm_db::generate_tickets_for_seat(&pool, seat.id)
             .await
             .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         seats.push(seat);
     }
-    info!("{} seats batch-added (Section {} Row {} Seats {}-{})", seats.len(), body.section, body.row, body.seat_start, body.seat_end);
+    info!(
+        "{} seats batch-added (Section {} Row {} Seats {}-{})",
+        seats.len(),
+        body.section,
+        body.row,
+        body.seat_start,
+        body.seat_end
+    );
     Ok(Json(seats))
 }
 
@@ -399,13 +446,20 @@ async fn api_update_seat_group(
     State(pool): State<AnyPool>,
     Json(body): Json<UpdateSeatGroupRequest>,
 ) -> Result<Json<Vec<gtm_models::Seat>>, (axum::http::StatusCode, String)> {
-    let updated = gtm_db::update_seat_group_notes(&pool, &body.section, &body.row, body.notes.as_deref())
-        .await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let updated =
+        gtm_db::update_seat_group_notes(&pool, &body.section, &body.row, body.notes.as_deref())
+            .await
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if updated == 0 {
-        return Err((axum::http::StatusCode::NOT_FOUND, "No seats found for that section/row".to_string()));
+        return Err((
+            axum::http::StatusCode::NOT_FOUND,
+            "No seats found for that section/row".to_string(),
+        ));
     }
-    info!("Updated notes for {} seats in Section {} Row {}", updated, body.section, body.row);
+    info!(
+        "Updated notes for {} seats in Section {} Row {}",
+        updated, body.section, body.row
+    );
     let seats = gtm_db::list_seats(&pool)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -422,7 +476,10 @@ async fn api_delete_seat(
     if deleted {
         Ok(Json(json!({ "status": "ok" })))
     } else {
-        Err((axum::http::StatusCode::NOT_FOUND, "Seat not found".to_string()))
+        Err((
+            axum::http::StatusCode::NOT_FOUND,
+            "Seat not found".to_string(),
+        ))
     }
 }
 
@@ -447,13 +504,17 @@ async fn api_update_ticket(
     Path(ticket_id): Path<i64>,
     Json(body): Json<UpdateTicketRequest>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    let updated = gtm_db::update_ticket_status(&pool, ticket_id, &body.status, body.notes.as_deref())
-        .await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let updated =
+        gtm_db::update_ticket_status(&pool, ticket_id, &body.status, body.notes.as_deref())
+            .await
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if updated {
         Ok(Json(json!({ "status": "ok" })))
     } else {
-        Err((axum::http::StatusCode::NOT_FOUND, "Ticket not found".to_string()))
+        Err((
+            axum::http::StatusCode::NOT_FOUND,
+            "Ticket not found".to_string(),
+        ))
     }
 }
 
@@ -488,7 +549,11 @@ async fn api_get_me(
     State(pool): State<AnyPool>,
 ) -> Result<Json<MeResponse>, (StatusCode, String)> {
     let user = resolve_user(&auth_user, &pool).await?;
-    let role = if auth_user.roles.contains(&"admin".to_string()) { "admin" } else { "member" };
+    let role = if auth_user.roles.contains(&"admin".to_string()) {
+        "admin"
+    } else {
+        "member"
+    };
     info!(sub = %auth_user.sub, jwt_roles = ?auth_user.roles, resolved_role = %role, "GET /api/users/me");
     Ok(Json(MeResponse {
         id: user.id,
@@ -543,7 +608,12 @@ async fn api_scrape_schedule(
     let ticket_count = gtm_db::generate_tickets_for_all_seats(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    info!("{} games, {} promotions upserted, {} tickets generated", data.games.len(), data.promotions.len(), ticket_count);
+    info!(
+        "{} games, {} promotions upserted, {} tickets generated",
+        data.games.len(),
+        data.promotions.len(),
+        ticket_count
+    );
     Ok(Json(ScrapeScheduleResponse {
         games: data.games.len(),
         promotions: data.promotions.len(),
@@ -607,11 +677,23 @@ async fn api_my_requests_create(
     let mut results = Vec::new();
     for req in &body.requests {
         if req.seats_requested < 1 || req.seats_requested > 4 {
-            return Err((StatusCode::BAD_REQUEST, format!("seats_requested must be 1-4 (got {} for game_pk {})", req.seats_requested, req.game_pk)));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "seats_requested must be 1-4 (got {} for game_pk {})",
+                    req.seats_requested, req.game_pk
+                ),
+            ));
         }
-        let tr = gtm_db::create_ticket_request(&pool, user.id, req.game_pk, req.seats_requested, req.notes.as_deref())
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let tr = gtm_db::create_ticket_request(
+            &pool,
+            user.id,
+            req.game_pk,
+            req.seats_requested,
+            req.notes.as_deref(),
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         results.push(tr);
     }
     Ok(Json(results))
@@ -630,7 +712,10 @@ async fn api_my_requests_update(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user = resolve_user(&auth_user, &pool).await?;
     if body.seats_requested < 1 || body.seats_requested > 4 {
-        return Err((StatusCode::BAD_REQUEST, "seats_requested must be 1-4".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "seats_requested must be 1-4".to_string(),
+        ));
     }
     let updated = gtm_db::update_ticket_request(&pool, request_id, user.id, body.seats_requested)
         .await
@@ -638,7 +723,10 @@ async fn api_my_requests_update(
     if updated {
         Ok(Json(json!({ "status": "ok" })))
     } else {
-        Err((StatusCode::NOT_FOUND, "Request not found or not pending".to_string()))
+        Err((
+            StatusCode::NOT_FOUND,
+            "Request not found or not pending".to_string(),
+        ))
     }
 }
 
@@ -654,7 +742,10 @@ async fn api_my_requests_withdraw(
     if withdrawn {
         Ok(Json(json!({ "status": "ok" })))
     } else {
-        Err((StatusCode::NOT_FOUND, "Request not found or not pending".to_string()))
+        Err((
+            StatusCode::NOT_FOUND,
+            "Request not found or not pending".to_string(),
+        ))
     }
 }
 
@@ -707,37 +798,35 @@ async fn api_admin_allocation(
     })?;
     require_admin(&auth_user)?;
 
-    let summary = gtm_db::allocation_summary(&pool)
-        .await
-        .map_err(|e| {
-            warn!(error = %e, "allocation: allocation_summary query failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+    let summary = gtm_db::allocation_summary(&pool).await.map_err(|e| {
+        warn!(error = %e, "allocation: allocation_summary query failed");
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
 
-    let games = gtm_db::list_games(&pool, None)
-        .await
-        .map_err(|e| {
-            warn!(error = %e, "allocation: list_games query failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+    let games = gtm_db::list_games(&pool, None).await.map_err(|e| {
+        warn!(error = %e, "allocation: list_games query failed");
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
     let game_map: std::collections::HashMap<i64, &gtm_models::Game> =
         games.iter().map(|g| (g.game_pk, g)).collect();
 
     let rows: Vec<AllocationSummaryRow> = summary
         .into_iter()
-        .filter_map(|(game_pk, total_seats, assigned, available, total_requested)| {
-            let g = game_map.get(&game_pk)?;
-            Some(AllocationSummaryRow {
-                game_pk,
-                official_date: g.official_date.clone(),
-                away_team_name: g.away_team_name.clone(),
-                total_seats,
-                assigned,
-                available,
-                total_requested,
-                oversubscribed: total_requested > available,
-            })
-        })
+        .filter_map(
+            |(game_pk, total_seats, assigned, available, total_requested)| {
+                let g = game_map.get(&game_pk)?;
+                Some(AllocationSummaryRow {
+                    game_pk,
+                    official_date: g.official_date.clone(),
+                    away_team_name: g.away_team_name.clone(),
+                    total_seats,
+                    assigned,
+                    available,
+                    total_requested,
+                    oversubscribed: total_requested > available,
+                })
+            },
+        )
         .collect();
 
     Ok(Json(rows))
@@ -810,7 +899,9 @@ async fn api_admin_allocation_game(
             seat: t.seat,
             status: t.status,
             assigned_to: t.assigned_to,
-            assigned_user_name: t.assigned_to.and_then(|uid| user_map.get(&uid).map(|u| u.name.clone())),
+            assigned_user_name: t
+                .assigned_to
+                .and_then(|uid| user_map.get(&uid).map(|u| u.name.clone())),
         })
         .collect();
 
@@ -819,7 +910,10 @@ async fn api_admin_allocation_game(
         .map(|r| RequestWithUser {
             id: r.id,
             user_id: r.user_id,
-            user_name: user_map.get(&r.user_id).map(|u| u.name.clone()).unwrap_or_default(),
+            user_name: user_map
+                .get(&r.user_id)
+                .map(|u| u.name.clone())
+                .unwrap_or_default(),
             seats_requested: r.seats_requested,
             seats_approved: r.seats_approved,
             status: r.status,
@@ -856,7 +950,8 @@ async fn api_admin_allocate(
 
     let mut assigned_count = 0u64;
     // Track seats approved per request so we can update them
-    let mut request_approvals: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
+    let mut request_approvals: std::collections::HashMap<i64, i64> =
+        std::collections::HashMap::new();
 
     for a in &body.assignments {
         let ok = gtm_db::assign_ticket(&pool, a.game_ticket_id, a.user_id)
@@ -894,7 +989,10 @@ async fn api_admin_revoke(
     if ok {
         Ok(Json(json!({ "status": "ok" })))
     } else {
-        Err((StatusCode::NOT_FOUND, "Ticket not found or not assigned".to_string()))
+        Err((
+            StatusCode::NOT_FOUND,
+            "Ticket not found or not assigned".to_string(),
+        ))
     }
 }
 
@@ -941,10 +1039,7 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         "auth0_client_id": config.auth0_client_id,
         "auth0_audience": config.auth0_audience,
     });
-    let config_script = format!(
-        "<script>window.__GTM_CONFIG__={}</script>",
-        config_json
-    );
+    let config_script = format!("<script>window.__GTM_CONFIG__={}</script>", config_json);
     let spa_html = Arc::new(raw_html.replace("</head>", &format!("{config_script}</head>")));
     info!("SPA config injected into {index_path}");
 
@@ -980,22 +1075,37 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         .route("/users", get(api_list_users))
         .route("/admin/scrape-schedule", post(api_scrape_schedule))
         // Member: ticket requests
-        .route("/my/requests", get(api_my_requests_list).post(api_my_requests_create))
-        .route("/my/requests/{id}", patch(api_my_requests_update).delete(api_my_requests_withdraw))
+        .route(
+            "/my/requests",
+            get(api_my_requests_list).post(api_my_requests_create),
+        )
+        .route(
+            "/my/requests/{id}",
+            patch(api_my_requests_update).delete(api_my_requests_withdraw),
+        )
         // Member: my games (allocated tickets)
         .route("/my/games", get(api_my_games))
         .route("/my/games/{game_pk}/release", post(api_my_games_release))
         // Admin: allocation
         .route("/admin/allocation", get(api_admin_allocation))
-        .route("/admin/allocation/{game_pk}", get(api_admin_allocation_game))
+        .route(
+            "/admin/allocation/{game_pk}",
+            get(api_admin_allocation_game),
+        )
         .route("/admin/allocate", post(api_admin_allocate))
         .route("/admin/allocate/{id}", delete(api_admin_revoke))
-        .route("/admin/allocation/by-user/{user_id}", get(api_admin_allocation_by_user))
+        .route(
+            "/admin/allocation/by-user/{user_id}",
+            get(api_admin_allocation_by_user),
+        )
         .route("/admin/requests", get(api_admin_requests));
 
     let app = Router::new()
         .nest("/api", api_routes)
-        .fallback_service(ServeDir::new("frontend/dist").not_found_service(get(serve_spa).with_state(state.clone())))
+        .fallback_service(
+            ServeDir::new("frontend/dist")
+                .not_found_service(get(serve_spa).with_state(state.clone())),
+        )
         .layer(cors)
         .with_state(state);
 
@@ -1065,7 +1175,11 @@ async fn main() -> anyhow::Result<()> {
             for promo in &data.promotions {
                 gtm_db::upsert_promotion(db, promo).await?;
             }
-            info!("{} games, {} promotions upserted into database", data.games.len(), data.promotions.len());
+            info!(
+                "{} games, {} promotions upserted into database",
+                data.games.len(),
+                data.promotions.len()
+            );
             let ticket_count = gtm_db::generate_tickets_for_all_seats(db).await?;
             if ticket_count > 0 {
                 info!("{ticket_count} new game tickets generated for existing seats");
@@ -1083,29 +1197,59 @@ async fn main() -> anyhow::Result<()> {
                 );
                 println!("{}", "-".repeat(140));
                 for g in &games {
-                    let home_away = if g.home_team_name == "San Francisco Giants" { "home" } else { "away" };
-                    let opponent = if home_away == "home" { &g.away_team_name } else { &g.home_team_name };
-                    let time_display = if g.start_time_tbd { "TBD".to_string() } else { g.game_date.clone() };
+                    let home_away = if g.home_team_name == "San Francisco Giants" {
+                        "home"
+                    } else {
+                        "away"
+                    };
+                    let opponent = if home_away == "home" {
+                        &g.away_team_name
+                    } else {
+                        &g.home_team_name
+                    };
+                    let time_display = if g.start_time_tbd {
+                        "TBD".to_string()
+                    } else {
+                        g.game_date.clone()
+                    };
                     let promos = gtm_db::get_promotions_for_game(db, g.game_pk).await?;
                     let promo_display = if promos.is_empty() {
                         String::new()
                     } else {
-                        promos.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", ")
+                        promos
+                            .iter()
+                            .map(|p| p.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     };
                     println!(
                         "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {:<20} {}",
-                        g.game_pk, g.official_date, time_display, home_away, opponent,
-                        g.status_detailed, g.venue_name, promo_display,
+                        g.game_pk,
+                        g.official_date,
+                        time_display,
+                        home_away,
+                        opponent,
+                        g.status_detailed,
+                        g.venue_name,
+                        promo_display,
                     );
                 }
                 println!("\n{} game(s) total", games.len());
             }
         }
-        Commands::AddSeat { section, row, seat, notes } => {
+        Commands::AddSeat {
+            section,
+            row,
+            seat,
+            notes,
+        } => {
             let db = pool.as_ref().unwrap();
             let new_seat = gtm_db::add_seat(db, &section, &row, &seat, notes.as_deref()).await?;
             let count = gtm_db::generate_tickets_for_seat(db, new_seat.id).await?;
-            println!("Added seat: Section {} Row {} Seat {} (id={})", new_seat.section, new_seat.row, new_seat.seat, new_seat.id);
+            println!(
+                "Added seat: Section {} Row {} Seat {} (id={})",
+                new_seat.section, new_seat.row, new_seat.seat, new_seat.id
+            );
             println!("{count} game tickets generated for home games");
         }
         Commands::ListSeats => {
@@ -1114,10 +1258,20 @@ async fn main() -> anyhow::Result<()> {
             if seats.is_empty() {
                 println!("No seats registered. Use `gtm add-seat` to add one.");
             } else {
-                println!("{:<6} {:<10} {:<6} {:<6} {}", "ID", "Section", "Row", "Seat", "Notes");
+                println!(
+                    "{:<6} {:<10} {:<6} {:<6} {}",
+                    "ID", "Section", "Row", "Seat", "Notes"
+                );
                 println!("{}", "-".repeat(50));
                 for s in &seats {
-                    println!("{:<6} {:<10} {:<6} {:<6} {}", s.id, s.section, s.row, s.seat, s.notes.as_deref().unwrap_or(""));
+                    println!(
+                        "{:<6} {:<10} {:<6} {:<6} {}",
+                        s.id,
+                        s.section,
+                        s.row,
+                        s.seat,
+                        s.notes.as_deref().unwrap_or("")
+                    );
                 }
                 println!("\n{} seat(s) total", seats.len());
             }
@@ -1129,7 +1283,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("No seats registered. Use `gtm add-seat` to add one.");
             } else {
                 let games = gtm_db::list_games(db, None).await?;
-                let home_games: Vec<_> = games.iter().filter(|g| g.home_team_name == "San Francisco Giants").collect();
+                let home_games: Vec<_> = games
+                    .iter()
+                    .filter(|g| g.home_team_name == "San Francisco Giants")
+                    .collect();
                 println!(
                     "{:<10} {:<12} {:<25} {}",
                     "GamePK", "Date", "Opponent", "Tickets (available/total)"
@@ -1138,16 +1295,25 @@ async fn main() -> anyhow::Result<()> {
                 for g in &home_games {
                     let tickets = gtm_db::list_tickets_for_game(db, g.game_pk).await?;
                     let available = tickets.iter().filter(|t| t.status == "available").count();
-                    let detail: Vec<String> = tickets.iter().map(|t| {
-                        format!("{}:{}{} [{}]", t.section, t.row, t.seat, t.status)
-                    }).collect();
+                    let detail: Vec<String> = tickets
+                        .iter()
+                        .map(|t| format!("{}:{}{} [{}]", t.section, t.row, t.seat, t.status))
+                        .collect();
                     println!(
                         "{:<10} {:<12} {:<25} {}/{} — {}",
-                        g.game_pk, g.official_date, g.away_team_name,
-                        available, tickets.len(), detail.join(", "),
+                        g.game_pk,
+                        g.official_date,
+                        g.away_team_name,
+                        available,
+                        tickets.len(),
+                        detail.join(", "),
                     );
                 }
-                println!("\n{} home game(s), {} seat(s)", home_games.len(), seats.len());
+                println!(
+                    "\n{} home game(s), {} seat(s)",
+                    home_games.len(),
+                    seats.len()
+                );
             }
         }
     }
