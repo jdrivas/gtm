@@ -473,12 +473,28 @@ async fn api_ticket_summary(
 
 // --- User API endpoints ---
 
+#[derive(Serialize)]
+struct MeResponse {
+    id: i64,
+    auth0_sub: String,
+    email: String,
+    name: String,
+    role: String,
+}
+
 async fn api_get_me(
     auth_user: AuthUser,
     State(pool): State<AnyPool>,
-) -> Result<Json<gtm_models::User>, (StatusCode, String)> {
+) -> Result<Json<MeResponse>, (StatusCode, String)> {
     let user = resolve_user(&auth_user, &pool).await?;
-    Ok(Json(user))
+    let role = if auth_user.roles.contains(&"admin".to_string()) { "admin" } else { "member" };
+    Ok(Json(MeResponse {
+        id: user.id,
+        auth0_sub: user.auth0_sub,
+        email: user.email,
+        name: user.name,
+        role: role.to_string(),
+    }))
 }
 
 async fn api_list_users(
@@ -541,14 +557,14 @@ async fn resolve_user(
 ) -> Result<gtm_models::User, (StatusCode, String)> {
     let name = auth_user.name.as_deref().unwrap_or("Unknown");
     let email = auth_user.email.as_deref().unwrap_or("unknown@example.com");
-    let role = if auth_user.roles.contains(&"admin".to_string()) { "admin" } else { "member" };
-    gtm_db::upsert_user(pool, &auth_user.sub, email, name, role)
+    gtm_db::upsert_user(pool, &auth_user.sub, email, name)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 fn require_admin(auth_user: &AuthUser) -> Result<(), (StatusCode, String)> {
     if !auth_user.roles.contains(&"admin".to_string()) {
+        warn!(sub = %auth_user.sub, roles = ?auth_user.roles, "Admin access denied");
         Err((StatusCode::FORBIDDEN, "Admin access required".to_string()))
     } else {
         Ok(())

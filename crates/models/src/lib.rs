@@ -74,7 +74,6 @@ pub struct User {
     pub auth0_sub: String,
     pub email: String,
     pub name: String,
-    pub role: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

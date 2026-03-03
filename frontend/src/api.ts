@@ -1,4 +1,4 @@
-import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, User } from './types';
+import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, MeResponse } from './types';
 
 // --- Auth-aware fetch ---
 
@@ -87,7 +87,7 @@ export async function fetchSeats(): Promise<Seat[]> {
 
 // --- User ---
 
-export async function fetchMe(): Promise<User> {
+export async function fetchMe(): Promise<MeResponse> {
   const res = await authFetch('/api/users/me');
   if (!res.ok) throw new Error(`Failed to fetch user: ${res.statusText}`);
   return res.json();

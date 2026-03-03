@@ -302,26 +302,24 @@ pub async fn ticket_summary_for_games(pool: &AnyPool) -> Result<Vec<(i64, i64, i
 
 // --- Users ---
 
-pub async fn upsert_user(pool: &AnyPool, auth0_sub: &str, email: &str, name: &str, role: &str) -> Result<User> {
-    let sql = pg("INSERT INTO users (auth0_sub, email, name, role) VALUES (?, ?, ?, ?) \
+pub async fn upsert_user(pool: &AnyPool, auth0_sub: &str, email: &str, name: &str) -> Result<User> {
+    let sql = pg("INSERT INTO users (auth0_sub, email, name) VALUES (?, ?, ?) \
          ON CONFLICT(auth0_sub) DO UPDATE SET \
             email = excluded.email, \
             name = excluded.name, \
-            role = excluded.role, \
             updated_at = CURRENT_TIMESTAMP \
-         RETURNING id, auth0_sub, email, name, role");
+         RETURNING id, auth0_sub, email, name");
     let user = sqlx::query_as::<_, User>(&sql)
     .bind(auth0_sub)
     .bind(email)
     .bind(name)
-    .bind(role)
     .fetch_one(pool)
     .await?;
     Ok(user)
 }
 
 pub async fn get_user_by_sub(pool: &AnyPool, auth0_sub: &str) -> Result<Option<User>> {
-    let sql = pg("SELECT id, auth0_sub, email, name, role FROM users WHERE auth0_sub = ?");
+    let sql = pg("SELECT id, auth0_sub, email, name FROM users WHERE auth0_sub = ?");
     let user = sqlx::query_as::<_, User>(&sql)
     .bind(auth0_sub)
     .fetch_optional(pool)
@@ -331,7 +329,7 @@ pub async fn get_user_by_sub(pool: &AnyPool, auth0_sub: &str) -> Result<Option<U
 
 pub async fn list_users(pool: &AnyPool) -> Result<Vec<User>> {
     let users = sqlx::query_as::<_, User>(
-        "SELECT id, auth0_sub, email, name, role FROM users ORDER BY name",
+        "SELECT id, auth0_sub, email, name FROM users ORDER BY name",
     )
     .fetch_all(pool)
     .await?;

@@ -108,6 +108,13 @@ export interface User {
   auth0_sub: string;
   email: string;
   name: string;
+}
+
+export interface MeResponse {
+  id: number;
+  auth0_sub: string;
+  email: string;
+  name: string;
   role: string;
 }
 
