@@ -1,17 +1,38 @@
 # --- ECR Repository ---
+# Shared across environments. Staging creates it; prod reads via data source.
 
 resource "aws_ecr_repository" "gtm" {
+  count                = var.environment == "staging" ? 1 : 0
   name                 = "gtm"
   image_tag_mutability = "MUTABLE"
-  force_delete         = var.environment == "staging"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
   }
 }
 
+data "aws_ecr_repository" "gtm" {
+  count = var.environment != "staging" ? 1 : 0
+  name  = "gtm"
+}
+
+locals {
+  ecr_repository_url = (
+    var.environment == "staging"
+    ? aws_ecr_repository.gtm[0].repository_url
+    : data.aws_ecr_repository.gtm[0].repository_url
+  )
+  ecr_repository_name = (
+    var.environment == "staging"
+    ? aws_ecr_repository.gtm[0].name
+    : data.aws_ecr_repository.gtm[0].name
+  )
+}
+
 resource "aws_ecr_lifecycle_policy" "gtm" {
-  repository = aws_ecr_repository.gtm.name
+  count      = var.environment == "staging" ? 1 : 0
+  repository = aws_ecr_repository.gtm[0].name
 
   policy = jsonencode({
     rules = [
@@ -85,7 +106,7 @@ resource "aws_ecs_task_definition" "gtm" {
 
   container_definitions = jsonencode([{
     name      = "gtm"
-    image     = "${aws_ecr_repository.gtm.repository_url}:${var.environment}-latest"
+    image     = "${local.ecr_repository_url}:${var.environment}-latest"
     essential = true
 
     portMappings = [{

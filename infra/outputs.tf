@@ -15,7 +15,7 @@ output "rds_endpoint" {
 
 output "ecr_repository_url" {
   description = "ECR repository URL"
-  value       = aws_ecr_repository.gtm.repository_url
+  value       = local.ecr_repository_url
 }
 
 output "ecs_cluster_name" {

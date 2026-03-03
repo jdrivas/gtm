@@ -74,11 +74,6 @@ resource "aws_iam_role_policy" "ecs_task_exec" {
 
 # --- GitHub Actions OIDC ---
 
-data "aws_iam_openid_connect_provider" "github" {
-  count = var.environment == "prod" ? 1 : 0
-  url   = "https://token.actions.githubusercontent.com"
-}
-
 resource "aws_iam_openid_connect_provider" "github" {
   count = var.environment == "prod" ? 1 : 0
   url   = "https://token.actions.githubusercontent.com"
@@ -88,11 +83,11 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  github_oidc_arn = var.environment == "prod" ? (
-    length(data.aws_iam_openid_connect_provider.github) > 0
-    ? data.aws_iam_openid_connect_provider.github[0].arn
-    : aws_iam_openid_connect_provider.github[0].arn
-  ) : ""
+  github_oidc_arn = (
+    var.environment == "prod"
+    ? aws_iam_openid_connect_provider.github[0].arn
+    : ""
+  )
 }
 
 resource "aws_iam_role" "github_actions" {
