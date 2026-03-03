@@ -79,9 +79,39 @@ export default function SchedulePage({ userRole }: SchedulePageProps) {
     return (
       <div className="text-center py-20 text-gray-500">
         <p className="text-lg">No games found.</p>
-        <p className="text-sm mt-2">
-          Run <code className="text-orange-400">gtm scrape-schedule</code> to load schedule data.
-        </p>
+        {userRole === 'admin' ? (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <button
+              onClick={async () => {
+                setScraping(true);
+                setScrapeResult(null);
+                try {
+                  const r = await scrapeSchedule();
+                  setScrapeResult(`Updated: ${r.games} games, ${r.promotions} promotions, ${r.tickets} tickets`);
+                  loadData();
+                } catch (e: any) {
+                  setScrapeResult(`Error: ${e.message}`);
+                } finally {
+                  setScraping(false);
+                }
+              }}
+              disabled={scraping}
+              className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium bg-orange-600 text-white hover:bg-orange-500 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${scraping ? 'animate-spin' : ''}`} />
+              {scraping ? 'Scraping…' : 'Scrape Schedule'}
+            </button>
+            {scrapeResult && (
+              <span className={`text-xs ${scrapeResult.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                {scrapeResult}
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm mt-2">
+            Run <code className="text-orange-400">gtm scrape-schedule</code> to load schedule data.
+          </p>
+        )}
       </div>
     );
   }
