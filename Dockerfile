@@ -1,20 +1,4 @@
-# Stage 1: Build the Rust binary
-FROM rust:1.88-bookworm AS rust-builder
-
-WORKDIR /app
-
-# Copy workspace files
-COPY Cargo.toml Cargo.lock ./
-COPY crates/ crates/
-COPY migrations/ migrations/
-COPY migrations-sqlite/ migrations-sqlite/
-
-# Build release binary
-ARG GTM_GIT_HASH=unknown
-ENV GTM_GIT_HASH=${GTM_GIT_HASH}
-RUN cargo build --release --bin gtm
-
-# Stage 2: Build the frontend
+# Stage 1: Build the frontend
 FROM node:20-bookworm-slim AS frontend-builder
 
 WORKDIR /app/frontend
@@ -26,7 +10,7 @@ COPY frontend/ ./
 
 RUN npm run build
 
-# Stage 3: Minimal runtime image
+# Stage 2: Minimal runtime image
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -38,10 +22,11 @@ RUN useradd --create-home --shell /bin/bash gtm
 
 WORKDIR /home/gtm
 
-COPY --from=rust-builder /app/target/release/gtm ./gtm
+# Pre-built binary downloaded from GitHub Releases (see Makefile `download` target)
+COPY bin/gtm ./gtm
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-RUN chown -R gtm:gtm /home/gtm
+RUN chmod +x ./gtm && chown -R gtm:gtm /home/gtm
 USER gtm
 
 EXPOSE 3000

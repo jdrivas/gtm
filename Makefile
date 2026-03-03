@@ -1,5 +1,5 @@
 # GTM Deployment Makefile
-# Usage: make <target> [ENV=staging|prod]
+# Usage: make <target> [ENV=staging|prod] [VERSION=v0.1.2]
 
 ENV          ?= staging
 AWS_PROFILE  ?= gtm
@@ -9,9 +9,12 @@ ECR_REPO     := $(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com/gtm
 IMAGE_TAG    := $(ENV)-latest
 ECS_CLUSTER  := gtm-$(ENV)
 ECS_SERVICE  := gtm-$(ENV)
-GIT_HASH     := $(shell git rev-parse --short HEAD)
+GITHUB_REPO  := jdrivas/gtm
 
-.PHONY: help ecr-login build push deploy restart logs status plan apply
+# VERSION: set explicitly (e.g. VERSION=v0.1.2) or auto-detect latest release
+VERSION      ?= $(shell gh release view --repo $(GITHUB_REPO) --json tagName -q .tagName 2>/dev/null || echo "")
+
+.PHONY: help ecr-login download build push deploy restart logs status plan apply release
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -20,9 +23,17 @@ ecr-login: ## Authenticate Docker with ECR
 	AWS_PROFILE=$(AWS_PROFILE) aws ecr get-login-password --region $(AWS_REGION) \
 		| docker login --username AWS --password-stdin $(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
 
-build: ## Build Docker image for linux/amd64
+download: ## Download pre-built binary from GitHub Releases
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: No VERSION set and no releases found. Tag a release first."; exit 1; fi
+	@echo "Downloading gtm binary from release $(VERSION)..."
+	@mkdir -p bin
+	@curl -fSL "https://github.com/$(GITHUB_REPO)/releases/download/$(VERSION)/gtm" -o bin/gtm
+	@chmod +x bin/gtm
+	@echo "Downloaded bin/gtm ($(VERSION))"
+
+build: ## Build Docker image (requires bin/gtm from download)
+	@if [ ! -f bin/gtm ]; then echo "ERROR: bin/gtm not found. Run 'make download' first."; exit 1; fi
 	docker build --platform linux/amd64 \
-		--build-arg GTM_GIT_HASH=$(GIT_HASH) \
 		-t $(ECR_REPO):$(IMAGE_TAG) .
 
 push: ## Push image to ECR
@@ -34,7 +45,14 @@ restart: ## Force ECS to pull latest image and redeploy
 		--force-new-deployment --region $(AWS_REGION) \
 		--query 'service.{status:status,desired:desiredCount}' --output table
 
-deploy: ecr-login build push restart ## Full deploy: login, build, push, restart
+deploy: ecr-login download build push restart ## Full deploy: download binary, build image, push, restart
+
+release: ## Create a new release tag (use VERSION=v0.x.y)
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=v0.1.2"; exit 1; fi
+	git tag $(VERSION)
+	git push origin $(VERSION)
+	@echo "Tag $(VERSION) pushed. GitHub Actions will build the binary and create the release."
+	@echo "Run 'make deploy VERSION=$(VERSION)' once the release is ready."
 
 logs: ## Tail ECS logs (last 10 min)
 	AWS_PROFILE=$(AWS_PROFILE) aws logs tail /ecs/$(ECS_CLUSTER) \

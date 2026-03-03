@@ -23,6 +23,9 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# Release binaries
+/bin/
+
 # Docker
 docker-compose.override.yml
 
