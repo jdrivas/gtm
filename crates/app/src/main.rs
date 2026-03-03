@@ -488,6 +488,7 @@ async fn api_get_me(
 ) -> Result<Json<MeResponse>, (StatusCode, String)> {
     let user = resolve_user(&auth_user, &pool).await?;
     let role = if auth_user.roles.contains(&"admin".to_string()) { "admin" } else { "member" };
+    info!(sub = %auth_user.sub, jwt_roles = ?auth_user.roles, resolved_role = %role, "GET /api/users/me");
     Ok(Json(MeResponse {
         id: user.id,
         auth0_sub: user.auth0_sub,
