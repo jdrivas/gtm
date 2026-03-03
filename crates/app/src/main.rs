@@ -700,16 +700,25 @@ async fn api_admin_allocation(
     auth_user: AuthUser,
     State(pool): State<AnyPool>,
 ) -> Result<Json<Vec<AllocationSummaryRow>>, (StatusCode, String)> {
-    let _user = resolve_user(&auth_user, &pool).await?;
+    let _user = resolve_user(&auth_user, &pool).await.map_err(|e| {
+        warn!(error = %e.1, "allocation: resolve_user failed");
+        e
+    })?;
     require_admin(&auth_user)?;
 
     let summary = gtm_db::allocation_summary(&pool)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            warn!(error = %e, "allocation: allocation_summary query failed");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     let games = gtm_db::list_games(&pool, None)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            warn!(error = %e, "allocation: list_games query failed");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
     let game_map: std::collections::HashMap<i64, &gtm_models::Game> =
         games.iter().map(|g| (g.game_pk, g)).collect();
 

@@ -155,7 +155,10 @@ export async function releaseGameTickets(gamePk: number): Promise<{ released: nu
 
 export async function fetchAllocationSummary(): Promise<AllocationSummaryRow[]> {
   const res = await authFetch('/api/admin/allocation');
-  if (!res.ok) throw new Error(`Failed to fetch allocation: ${res.statusText}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to fetch allocation: ${res.statusText}`);
+  }
   return res.json();
 }
 
