@@ -49,6 +49,9 @@ deploy: ecr-login download build push restart ## Full deploy: download binary, b
 
 release: ## Create a new release tag (use VERSION=v0.x.y)
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=v0.1.2"; exit 1; fi
+	@if ! head -10 CHANGELOG.md | grep -q "$(VERSION)"; then \
+		echo "ERROR: CHANGELOG.md does not mention $(VERSION). Update it before releasing."; exit 1; \
+	fi
 	git tag $(VERSION)
 	git push origin $(VERSION)
 	@echo "Tag $(VERSION) pushed. GitHub Actions will build the binary and create the release."

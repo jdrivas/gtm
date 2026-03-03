@@ -70,8 +70,15 @@ jobs:
           GTM_GIT_HASH: ${{ github.sha }}
           GTM_DB_URL: "postgres://gtm:gtm@localhost/gtm_test"
 
+      - name: Extract changelog for this release
+        id: changelog
+        run: |
+          # Extract text between the first two ## [v...] headers (i.e. latest entry only)
+          awk '/^## \[v/{if(found) exit; found=1; next} found' CHANGELOG.md > /tmp/release_body.md
+          cat /tmp/release_body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: /tmp/release_body.md
           files: target/release/gtm
