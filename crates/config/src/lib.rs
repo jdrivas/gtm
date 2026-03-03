@@ -57,10 +57,10 @@ impl Config {
         let mut config = Self::defaults();
 
         // Layer 2: config file
-        if let Ok(contents) = std::fs::read_to_string(Self::file_path()) {
-            if let Ok(file) = toml::from_str::<FileConfig>(&contents) {
-                config.apply_file(file);
-            }
+        if let Ok(contents) = std::fs::read_to_string(Self::file_path())
+            && let Ok(file) = toml::from_str::<FileConfig>(&contents)
+        {
+            config.apply_file(file);
         }
 
         // Layer 3: environment variables
@@ -115,10 +115,10 @@ impl Config {
         if let Ok(v) = std::env::var("GTM_DB_URL") {
             self.db_url = v;
         }
-        if let Ok(v) = std::env::var("GTM_PORT") {
-            if let Ok(p) = v.parse() {
-                self.port = p;
-            }
+        if let Ok(v) = std::env::var("GTM_PORT")
+            && let Ok(p) = v.parse()
+        {
+            self.port = p;
         }
         if let Ok(v) = std::env::var("GTM_LOG_LEVEL") {
             self.log_level = v;

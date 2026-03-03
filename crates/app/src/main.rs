@@ -792,9 +792,8 @@ async fn api_admin_allocation(
     auth_user: AuthUser,
     State(pool): State<AnyPool>,
 ) -> Result<Json<Vec<AllocationSummaryRow>>, (StatusCode, String)> {
-    let _user = resolve_user(&auth_user, &pool).await.map_err(|e| {
+    let _user = resolve_user(&auth_user, &pool).await.inspect_err(|e| {
         warn!(error = %e.1, "allocation: resolve_user failed");
-        e
     })?;
     require_admin(&auth_user)?;
 
@@ -1192,8 +1191,8 @@ async fn main() -> anyhow::Result<()> {
                 println!("No games found.");
             } else {
                 println!(
-                    "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {:<20} {}",
-                    "GamePK", "Date", "Time", "H/A", "Opponent", "Status", "Venue", "Promotions"
+                    "{:<10} {:<12} {:<22} {:<6} {:<25} {:<10} {:<20} Promotions",
+                    "GamePK", "Date", "Time", "H/A", "Opponent", "Status", "Venue"
                 );
                 println!("{}", "-".repeat(140));
                 for g in &games {
@@ -1259,8 +1258,8 @@ async fn main() -> anyhow::Result<()> {
                 println!("No seats registered. Use `gtm add-seat` to add one.");
             } else {
                 println!(
-                    "{:<6} {:<10} {:<6} {:<6} {}",
-                    "ID", "Section", "Row", "Seat", "Notes"
+                    "{:<6} {:<10} {:<6} {:<6} Notes",
+                    "ID", "Section", "Row", "Seat"
                 );
                 println!("{}", "-".repeat(50));
                 for s in &seats {
@@ -1288,8 +1287,8 @@ async fn main() -> anyhow::Result<()> {
                     .filter(|g| g.home_team_name == "San Francisco Giants")
                     .collect();
                 println!(
-                    "{:<10} {:<12} {:<25} {}",
-                    "GamePK", "Date", "Opponent", "Tickets (available/total)"
+                    "{:<10} {:<12} {:<25} Tickets (available/total)",
+                    "GamePK", "Date", "Opponent"
                 );
                 println!("{}", "-".repeat(80));
                 for g in &home_games {
