@@ -11,11 +11,6 @@ ECS_CLUSTER  := gtm-$(ENV)
 ECS_SERVICE  := gtm-$(ENV)
 GIT_HASH     := $(shell git rev-parse --short HEAD)
 
-# Auth0 build args (baked into the frontend at build time)
-VITE_AUTH0_DOMAIN   ?= momentlabs.auth0.com
-VITE_AUTH0_CLIENT_ID ?= rNAdEOf5H8aQNcvK5wonHh8x0iI18knE
-VITE_AUTH0_AUDIENCE ?= https://gtm-api.momentlabs.io
-
 .PHONY: help ecr-login build push deploy restart logs status plan apply
 
 help: ## Show this help
@@ -28,9 +23,6 @@ ecr-login: ## Authenticate Docker with ECR
 build: ## Build Docker image for linux/amd64
 	docker build --platform linux/amd64 \
 		--build-arg GTM_GIT_HASH=$(GIT_HASH) \
-		--build-arg VITE_AUTH0_DOMAIN=$(VITE_AUTH0_DOMAIN) \
-		--build-arg VITE_AUTH0_CLIENT_ID=$(VITE_AUTH0_CLIENT_ID) \
-		--build-arg VITE_AUTH0_AUDIENCE=$(VITE_AUTH0_AUDIENCE) \
 		-t $(ECR_REPO):$(IMAGE_TAG) .
 
 push: ## Push image to ECR

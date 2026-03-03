@@ -65,9 +65,6 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 
 docker build \
   --build-arg GTM_GIT_HASH=$(git rev-parse HEAD) \
-  --build-arg VITE_AUTH0_DOMAIN=momentlabs.auth0.com \
-  --build-arg VITE_AUTH0_CLIENT_ID=<your-client-id> \
-  --build-arg VITE_AUTH0_AUDIENCE=https://gtm-api.momentlabs.io \
   -t $ECR_URL:staging-latest \
   .
 
@@ -81,9 +78,8 @@ In your GitHub repo settings, add these secrets:
 | Secret | Value |
 |--------|-------|
 | `AWS_DEPLOY_ROLE_ARN` | Output from `terraform output` — the GitHub Actions IAM role ARN |
-| `AUTH0_DOMAIN` | `momentlabs.auth0.com` |
-| `AUTH0_CLIENT_ID` | Your Auth0 SPA client ID for the target environment |
-| `AUTH0_AUDIENCE` | `https://gtm-api.momentlabs.io` |
+
+Auth0 values (`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_AUDIENCE`) are managed in AWS Secrets Manager and injected into the ECS task at runtime — they are **not** needed as GitHub Actions secrets.
 
 ## CLI Access to Production DB
 

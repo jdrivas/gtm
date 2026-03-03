@@ -107,6 +107,10 @@ resource "aws_ecs_task_definition" "gtm" {
         valueFrom = "${aws_secretsmanager_secret.auth0.arn}:domain::"
       },
       {
+        name      = "AUTH0_CLIENT_ID"
+        valueFrom = "${aws_secretsmanager_secret.auth0.arn}:client_id::"
+      },
+      {
         name      = "AUTH0_AUDIENCE"
         valueFrom = "${aws_secretsmanager_secret.auth0.arn}:audience::"
       },

@@ -74,6 +74,12 @@ variable "auth0_audience" {
   default     = "https://gtm-api.momentlabs.io"
 }
 
+variable "auth0_client_id" {
+  description = "Auth0 SPA client ID"
+  type        = string
+  default     = "rNAdEOf5H8aQNcvK5wonHh8x0iI18knE"
+}
+
 variable "github_org" {
   description = "GitHub organization or user for OIDC"
   type        = string

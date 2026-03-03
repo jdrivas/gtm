@@ -157,6 +157,7 @@ impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
 struct AppState {
     pool: AnyPool,
     auth: Arc<AuthConfig>,
+    spa_html: Arc<String>,
 }
 
 impl axum::extract::FromRef<AppState> for AnyPool {
@@ -924,20 +925,41 @@ async fn api_admin_requests(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
-async fn run_server(port: u16, pool: AnyPool, auth_domain: &str, auth_audience: &str) -> anyhow::Result<()> {
+async fn serve_spa(State(state): State<AppState>) -> axum::response::Html<String> {
+    axum::response::Html((*state.spa_html).clone())
+}
+
+async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> anyhow::Result<()> {
     info!("GTM v{}", version_string());
 
+    // Read index.html and inject runtime config for the SPA
+    let index_path = "frontend/dist/index.html";
+    let raw_html = std::fs::read_to_string(index_path)
+        .unwrap_or_else(|_| "<html><body>Frontend not built</body></html>".to_string());
+    let config_json = serde_json::json!({
+        "auth0_domain": config.auth0_domain,
+        "auth0_client_id": config.auth0_client_id,
+        "auth0_audience": config.auth0_audience,
+    });
+    let config_script = format!(
+        "<script>window.__GTM_CONFIG__={}</script>",
+        config_json
+    );
+    let spa_html = Arc::new(raw_html.replace("</head>", &format!("{config_script}</head>")));
+    info!("SPA config injected into {index_path}");
+
     // Fetch JWKS from Auth0 at startup
-    let jwks_keys = fetch_jwks(auth_domain).await?;
+    let jwks_keys = fetch_jwks(&config.auth0_domain).await?;
     let auth_config = Arc::new(AuthConfig {
         jwks_keys,
-        audience: auth_audience.to_string(),
-        issuer: format!("https://{auth_domain}/"),
+        audience: config.auth0_audience.clone(),
+        issuer: format!("https://{}/", config.auth0_domain),
     });
 
     let state = AppState {
         pool,
         auth: auth_config,
+        spa_html,
     };
 
     let cors = CorsLayer::permissive();
@@ -973,7 +995,7 @@ async fn run_server(port: u16, pool: AnyPool, auth_domain: &str, auth_audience: 
 
     let app = Router::new()
         .nest("/api", api_routes)
-        .fallback_service(ServeDir::new("frontend/dist").fallback(tower_http::services::ServeFile::new("frontend/dist/index.html")))
+        .fallback_service(ServeDir::new("frontend/dist").not_found_service(get(serve_spa).with_state(state.clone())))
         .layer(cors)
         .with_state(state);
 
@@ -1032,7 +1054,7 @@ async fn main() -> anyhow::Result<()> {
             println!("Hello, Giants! 🏟️");
         }
         Commands::Serve { .. } => {
-            run_server(config.port, pool.unwrap(), &config.auth0_domain, &config.auth0_audience).await?;
+            run_server(config.port, pool.unwrap(), &config).await?;
         }
         Commands::ScrapeSchedule { season } => {
             let db = pool.as_ref().unwrap();

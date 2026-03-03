@@ -20,6 +20,7 @@ pub struct Config {
 
     // Auth0
     pub auth0_domain: String,
+    pub auth0_client_id: String,
     pub auth0_audience: String,
 
 }
@@ -34,6 +35,7 @@ struct FileConfig {
     utc: Option<bool>,
     log_json: Option<bool>,
     auth0_domain: Option<String>,
+    auth0_client_id: Option<String>,
     auth0_audience: Option<String>,
 }
 
@@ -78,6 +80,7 @@ impl Config {
             utc: false,
             log_json: false,
             auth0_domain: "momentlabs.auth0.com".to_string(),
+            auth0_client_id: "rNAdEOf5H8aQNcvK5wonHh8x0iI18knE".to_string(),
             auth0_audience: "https://gtm-api.momentlabs.io".to_string(),
         }
     }
@@ -89,6 +92,7 @@ impl Config {
         if let Some(v) = file.utc { self.utc = v; }
         if let Some(v) = file.log_json { self.log_json = v; }
         if let Some(v) = file.auth0_domain { self.auth0_domain = v; }
+        if let Some(v) = file.auth0_client_id { self.auth0_client_id = v; }
         if let Some(v) = file.auth0_audience { self.auth0_audience = v; }
     }
 
@@ -105,6 +109,7 @@ impl Config {
             self.log_json = v == "1" || v.eq_ignore_ascii_case("true");
         }
         if let Ok(v) = std::env::var("AUTH0_DOMAIN") { self.auth0_domain = v; }
+        if let Ok(v) = std::env::var("AUTH0_CLIENT_ID") { self.auth0_client_id = v; }
         if let Ok(v) = std::env::var("AUTH0_AUDIENCE") { self.auth0_audience = v; }
     }
 }

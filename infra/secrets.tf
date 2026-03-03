@@ -18,7 +18,8 @@ resource "aws_secretsmanager_secret" "auth0" {
 resource "aws_secretsmanager_secret_version" "auth0" {
   secret_id = aws_secretsmanager_secret.auth0.id
   secret_string = jsonencode({
-    domain   = var.auth0_domain
-    audience = var.auth0_audience
+    domain    = var.auth0_domain
+    client_id = var.auth0_client_id
+    audience  = var.auth0_audience
   })
 }

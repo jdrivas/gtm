@@ -11,7 +11,7 @@ Browser → Auth0 login → JWT access token (with custom claims) → Server val
 ```
 
 - **Auth0 tenant**: `momentlabs.auth0.com`
-- **SPA client ID**: configured per environment via `VITE_AUTH0_CLIENT_ID`
+- **SPA client ID**: configured per environment via `AUTH0_CLIENT_ID` (injected at runtime)
 - **API audience**: `https://gtm-api.momentlabs.io`
 
 ## Roles
@@ -58,5 +58,17 @@ The `users` table stores identity only: `id`, `auth0_sub`, `email`, `name`. Ther
 3. Create an "admin" role in Auth0 → User Management → Roles
 4. Assign the "admin" role to admin users
 5. Add the post-login Action (above) to the Auth0 Login Flow
-6. Set `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `VITE_AUTH0_AUDIENCE` at build time
-7. Set `AUTH0_DOMAIN`, `AUTH0_AUDIENCE` as server environment variables
+6. Set `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_AUDIENCE` as server environment variables
+   (on ECS these come from Secrets Manager; locally from `~/.gtm/config.toml` or env)
+
+## Frontend config injection
+
+The frontend bundle is **environment-agnostic** — Auth0 values are NOT baked in at build time.
+
+At startup, the server reads `frontend/dist/index.html` and injects a `<script>` tag:
+
+```html
+<script>window.__GTM_CONFIG__={"auth0_domain":"…","auth0_client_id":"…","auth0_audience":"…"}</script>
+```
+
+`main.tsx` reads `window.__GTM_CONFIG__` synchronously. For local `vite dev`, it falls back to `import.meta.env.VITE_AUTH0_*` from `frontend/.env`.
