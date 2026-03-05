@@ -67,11 +67,15 @@ export default function MyRequests() {
 
   useEffect(load, [isAuthenticated]);
 
-  // Load promos for requested games
+  // Load promos for all relevant games (requested + available)
   useEffect(() => {
-    if (requests.length === 0) return;
+    const requestedPks = requests.map((r) => r.game_pk);
+    const availablePks = allGames
+      .filter((g) => g.home_team_name === GIANTS_TEAM_NAME)
+      .map((g) => g.game_pk);
+    const gamePks = [...new Set([...requestedPks, ...availablePks])];
+    if (gamePks.length === 0) return;
     let cancelled = false;
-    const gamePks = [...new Set(requests.map((r) => r.game_pk))];
     Promise.all(
       gamePks.map(async (pk) => {
         try {
@@ -88,7 +92,7 @@ export default function MyRequests() {
       setPromoMap(map);
     });
     return () => { cancelled = true; };
-  }, [requests]);
+  }, [requests, allGames]);
 
   // Upcoming home games with no existing request
   const requestedPks = useMemo(() => new Set(requests.map((r) => r.game_pk)), [requests]);
