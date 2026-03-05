@@ -1103,6 +1103,7 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         .nest("/api", api_routes)
         .fallback_service(
             ServeDir::new("frontend/dist")
+                .append_index_html_on_directories(false)
                 .not_found_service(get(serve_spa).with_state(state.clone())),
         )
         .layer(cors)
