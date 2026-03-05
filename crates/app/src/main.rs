@@ -1116,12 +1116,8 @@ async fn api_admin_allocation_by_users(
                     UserAllocationEntry {
                         request_id: r.id,
                         game_pk: r.game_pk,
-                        official_date: game
-                            .map(|g| g.official_date.clone())
-                            .unwrap_or_default(),
-                        away_team_name: game
-                            .map(|g| g.away_team_name.clone())
-                            .unwrap_or_default(),
+                        official_date: game.map(|g| g.official_date.clone()).unwrap_or_default(),
+                        away_team_name: game.map(|g| g.away_team_name.clone()).unwrap_or_default(),
                         day_night: game.and_then(|g| g.day_night.clone()),
                         seats_requested: r.seats_requested,
                         seats_approved: r.seats_approved,
@@ -1142,10 +1138,7 @@ async fn api_admin_allocation_by_users(
                 })
                 .collect();
 
-            let total_allocated: i64 = entries
-                .iter()
-                .map(|e| e.user_tickets.len() as i64)
-                .sum();
+            let total_allocated: i64 = entries.iter().map(|e| e.user_tickets.len() as i64).sum();
             let total_requested: i64 = entries.iter().map(|e| e.seats_requested).sum();
             let games_allocated = entries
                 .iter()
