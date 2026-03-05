@@ -17,6 +17,7 @@ import {
   Send,
   Check,
   CalendarCheck,
+  RefreshCw,
   Clock,
 } from 'lucide-react';
 import type { Game, Promotion, TicketSummary, TicketRequest, GameTicketDetail, GameTicketWithUser } from './types';
@@ -100,6 +101,9 @@ interface Props {
   myRequests: TicketRequest[];
   myGames: GameTicketDetail[];
   onDataRefresh: () => void;
+  onScrape?: () => void;
+  scraping?: boolean;
+  scrapeResult?: string | null;
 }
 
 export default function ScheduleTable({
@@ -113,6 +117,9 @@ export default function ScheduleTable({
   myRequests,
   myGames,
   onDataRefresh,
+  onScrape,
+  scraping,
+  scrapeResult,
 }: Props) {
   const [selectedMonth, setSelectedMonth] = useState('All');
   const [sortKey, setSortKey] = useState<SortKey>('official_date');
@@ -319,6 +326,26 @@ export default function ScheduleTable({
             <CalendarCheck className="w-3.5 h-3.5" />
             My Games
           </button>
+        )}
+
+        {/* Scrape Schedule (admin only) */}
+        {userRole === 'admin' && onScrape && (
+          <>
+            <div className="h-6 w-px bg-gray-700" />
+            <button
+              onClick={onScrape}
+              disabled={scraping}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${scraping ? 'animate-spin' : ''}`} />
+              {scraping ? 'Scraping…' : 'Scrape'}
+            </button>
+            {scrapeResult && (
+              <span className={`text-xs ${scrapeResult.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                {scrapeResult}
+              </span>
+            )}
+          </>
         )}
 
         <div className="ml-auto text-sm text-gray-500">
