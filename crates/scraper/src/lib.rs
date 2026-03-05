@@ -108,7 +108,11 @@ impl From<ApiGame> for Game {
             status_abstract: g.status.abstract_game_state,
             status_detailed: g.status.detailed_state,
             status_code: g.status.status_code,
-            start_time_tbd: if g.status.start_time_tbd.unwrap_or(false) { 1 } else { 0 },
+            start_time_tbd: if g.status.start_time_tbd.unwrap_or(false) {
+                1
+            } else {
+                0
+            },
             away_team_id: g.teams.away.team.id,
             away_team_name: g.teams.away.team.name,
             away_score: g.teams.away.score,
