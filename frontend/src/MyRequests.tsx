@@ -175,9 +175,6 @@ export default function MyRequests() {
     }
   };
 
-  const setRowSeats = (gamePk: number, seats: number) => {
-    setSelections((prev) => ({ ...prev, [gamePk]: seats }));
-  };
 
   const handleBulkSubmit = async () => {
     const items = Object.entries(selections).map(([pk, seats]) => ({
@@ -460,13 +457,11 @@ export default function MyRequests() {
                     <th className="py-2 px-3 text-center">D/N</th>
                     <th className="py-2 px-3 text-center">Available</th>
                     <th className="py-2 px-3">Promos</th>
-                    <th className="py-2 px-3 text-center">Seats</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredGames.map((g) => {
                     const isSelected = selections[g.game_pk] !== undefined;
-                    const seats = selections[g.game_pk] ?? defaultSeats;
                     const summary = ticketSummary[g.game_pk];
                     return (
                       <tr
@@ -517,27 +512,6 @@ export default function MyRequests() {
                               <span className="text-gray-600">—</span>
                             );
                           })()}
-                        </td>
-                        <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
-                          {isSelected ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => setRowSeats(g.game_pk, Math.max(1, seats - 1))}
-                                className="p-0.5 rounded hover:bg-gray-700 text-gray-400"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="text-sm font-bold text-orange-400 w-4 text-center">{seats}</span>
-                              <button
-                                onClick={() => setRowSeats(g.game_pk, Math.min(4, seats + 1))}
-                                className="p-0.5 rounded hover:bg-gray-700 text-gray-400"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-gray-600 text-center block">—</span>
-                          )}
                         </td>
                       </tr>
                     );
