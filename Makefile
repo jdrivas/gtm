@@ -14,10 +14,21 @@ GITHUB_REPO  := jdrivas/gtm
 # VERSION: set explicitly (e.g. VERSION=v0.1.2) or auto-detect latest release
 VERSION      ?= $(shell gh release view --repo $(GITHUB_REPO) --json tagName -q .tagName 2>/dev/null || echo "")
 
-.PHONY: help ecr-login download build push deploy restart logs status plan apply release
+.PHONY: help ecr-login download build push deploy restart logs status plan apply release frontend-build frontend-dev dev dev-full
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+frontend-build: ## Build frontend (requires node/npm)
+	cd frontend && npm run build
+
+frontend-dev: ## Start frontend dev server with HMR (requires node/npm)
+	cd frontend && npm run dev
+
+dev: ## Run the local server (serves frontend/dist)
+	cargo run -- serve
+
+dev-full: frontend-build dev ## Build frontend then run local server
 
 ecr-login: ## Authenticate Docker with ECR
 	AWS_PROFILE=$(AWS_PROFILE) aws ecr get-login-password --region $(AWS_REGION) \

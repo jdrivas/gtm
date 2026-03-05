@@ -1,6 +1,88 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+/// Serde helper: store as i64 in DB (for SQLx Any compatibility) but
+/// serialize/deserialize as boolean in JSON.
+mod bool_as_i64 {
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bool(*value != 0)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<i64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de;
+        struct BoolOrIntVisitor;
+        impl<'de> de::Visitor<'de> for BoolOrIntVisitor {
+            type Value = i64;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a boolean or integer")
+            }
+            fn visit_bool<E: de::Error>(self, v: bool) -> Result<i64, E> {
+                Ok(if v { 1 } else { 0 })
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<i64, E> {
+                Ok(v)
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<i64, E> {
+                Ok(v as i64)
+            }
+        }
+        deserializer.deserialize_any(BoolOrIntVisitor)
+    }
+}
+
+/// Serde helper: Option<i64> ↔ Option<bool> in JSON.
+mod option_bool_as_i64 {
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(v) => serializer.serialize_bool(*v != 0),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de;
+        struct OptionBoolOrIntVisitor;
+        impl<'de> de::Visitor<'de> for OptionBoolOrIntVisitor {
+            type Value = Option<i64>;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("null, a boolean, or integer")
+            }
+            fn visit_none<E: de::Error>(self) -> Result<Option<i64>, E> {
+                Ok(None)
+            }
+            fn visit_unit<E: de::Error>(self) -> Result<Option<i64>, E> {
+                Ok(None)
+            }
+            fn visit_bool<E: de::Error>(self, v: bool) -> Result<Option<i64>, E> {
+                Ok(Some(if v { 1 } else { 0 }))
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Option<i64>, E> {
+                Ok(Some(v))
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Option<i64>, E> {
+                Ok(Some(v as i64))
+            }
+        }
+        deserializer.deserialize_any(OptionBoolOrIntVisitor)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Game {
     pub game_pk: i64,
@@ -12,15 +94,18 @@ pub struct Game {
     pub status_abstract: String,
     pub status_detailed: String,
     pub status_code: String,
-    pub start_time_tbd: bool,
+    #[serde(with = "bool_as_i64")]
+    pub start_time_tbd: i64,
     pub away_team_id: i64,
     pub away_team_name: String,
     pub away_score: Option<i64>,
-    pub away_is_winner: Option<bool>,
+    #[serde(with = "option_bool_as_i64")]
+    pub away_is_winner: Option<i64>,
     pub home_team_id: i64,
     pub home_team_name: String,
     pub home_score: Option<i64>,
-    pub home_is_winner: Option<bool>,
+    #[serde(with = "option_bool_as_i64")]
+    pub home_is_winner: Option<i64>,
     pub venue_id: i64,
     pub venue_name: String,
     pub day_night: Option<String>,
@@ -30,7 +115,8 @@ pub struct Game {
     pub double_header: String,
     pub game_number: i64,
     pub scheduled_innings: i64,
-    pub is_tie: bool,
+    #[serde(with = "bool_as_i64")]
+    pub is_tie: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

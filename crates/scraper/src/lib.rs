@@ -108,15 +108,15 @@ impl From<ApiGame> for Game {
             status_abstract: g.status.abstract_game_state,
             status_detailed: g.status.detailed_state,
             status_code: g.status.status_code,
-            start_time_tbd: g.status.start_time_tbd.unwrap_or(false),
+            start_time_tbd: if g.status.start_time_tbd.unwrap_or(false) { 1 } else { 0 },
             away_team_id: g.teams.away.team.id,
             away_team_name: g.teams.away.team.name,
             away_score: g.teams.away.score,
-            away_is_winner: g.teams.away.is_winner,
+            away_is_winner: g.teams.away.is_winner.map(|b| if b { 1 } else { 0 }),
             home_team_id: g.teams.home.team.id,
             home_team_name: g.teams.home.team.name,
             home_score: g.teams.home.score,
-            home_is_winner: g.teams.home.is_winner,
+            home_is_winner: g.teams.home.is_winner.map(|b| if b { 1 } else { 0 }),
             venue_id: g.venue.id,
             venue_name: g.venue.name,
             day_night: g.day_night,
@@ -126,7 +126,7 @@ impl From<ApiGame> for Game {
             double_header: g.double_header.unwrap_or_else(|| "N".to_string()),
             game_number: g.game_number.unwrap_or(1),
             scheduled_innings: g.scheduled_innings.unwrap_or(9),
-            is_tie: g.is_tie.unwrap_or(false),
+            is_tie: if g.is_tie.unwrap_or(false) { 1 } else { 0 },
         }
     }
 }

@@ -7,7 +7,7 @@ fn main() {
         .filter(|v| !v.is_empty() && v != "unknown");
 
     let git_hash = if let Some(h) = hash {
-        h
+        h[..h.len().min(7)].to_string()
     } else {
         let short = Command::new("git")
             .args(["rev-parse", "--short", "HEAD"])

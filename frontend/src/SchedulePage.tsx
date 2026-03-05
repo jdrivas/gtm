@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Ticket, RefreshCw } from 'lucide-react';
-import type { Game, TicketSummary, TicketRequest } from './types';
-import { fetchGames, fetchTicketSummary, fetchMyRequests, scrapeSchedule } from './api';
+import type { Game, TicketSummary, TicketRequest, GameTicketDetail } from './types';
+import { fetchGames, fetchTicketSummary, fetchMyRequests, fetchMyGames, scrapeSchedule } from './api';
 import ScheduleTable from './ScheduleTable';
 import RequestPanel from './RequestPanel';
 
@@ -11,7 +11,7 @@ interface SchedulePageProps {
 }
 
 export default function SchedulePage({ userRole }: SchedulePageProps) {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated, isLoading: authLoading } = useAuth0();
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +19,23 @@ export default function SchedulePage({ userRole }: SchedulePageProps) {
   const [ticketSummary, setTicketSummary] = useState<Record<number, TicketSummary>>({});
   const [showRequestPanel, setShowRequestPanel] = useState(false);
   const [myRequests, setMyRequests] = useState<TicketRequest[]>([]);
+  const [myGames, setMyGames] = useState<GameTicketDetail[]>([]);
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<string | null>(null);
 
   const loadData = () => {
-    Promise.all([fetchGames(), fetchTicketSummary()])
-      .then(([gameData, summaryData]) => {
+    // Wait for Auth0 to finish initializing before fetching
+    if (authLoading) return;
+
+    const fetches: [Promise<Game[]>, Promise<TicketSummary[]>, Promise<TicketRequest[]>, Promise<GameTicketDetail[]>] = [
+      fetchGames(),
+      fetchTicketSummary(),
+      isAuthenticated ? fetchMyRequests().catch(() => []) : Promise.resolve([]),
+      isAuthenticated ? fetchMyGames().catch(() => []) : Promise.resolve([]),
+    ];
+
+    Promise.all(fetches)
+      .then(([gameData, summaryData, requestData, gameTicketData]) => {
         setGames(gameData);
         const seasons = [...new Set(gameData.map((g) => g.season))].sort();
         if (seasons.length > 0) {
@@ -35,19 +46,14 @@ export default function SchedulePage({ userRole }: SchedulePageProps) {
           map[s.game_pk] = s;
         }
         setTicketSummary(map);
+        setMyRequests(requestData);
+        setMyGames(gameTicketData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-
-    // Fetch requests separately — a 401 during login redirect shouldn't fail the page
-    if (isAuthenticated) {
-      fetchMyRequests()
-        .then(setMyRequests)
-        .catch(() => {}); // silently ignore; user can see requests on the Requests page
-    }
   };
 
-  useEffect(loadData, [isAuthenticated]);
+  useEffect(loadData, [isAuthenticated, authLoading]);
 
   const seasons = useMemo(
     () => [...new Set(games.map((g) => g.season))].sort(),
@@ -179,6 +185,11 @@ export default function SchedulePage({ userRole }: SchedulePageProps) {
         selectedSeason={selectedSeason}
         onSeasonChange={setSelectedSeason}
         ticketSummary={ticketSummary}
+        userRole={userRole}
+        isAuthenticated={isAuthenticated}
+        myRequests={myRequests}
+        myGames={myGames}
+        onDataRefresh={loadData}
       />
     </div>
   );

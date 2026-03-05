@@ -1206,7 +1206,7 @@ async fn main() -> anyhow::Result<()> {
                     } else {
                         &g.home_team_name
                     };
-                    let time_display = if g.start_time_tbd {
+                    let time_display = if g.start_time_tbd != 0 {
                         "TBD".to_string()
                     } else {
                         g.game_date.clone()

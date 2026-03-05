@@ -19,14 +19,13 @@ function App() {
 
   useEffect(() => {
     setTokenGetter(async () => {
-      if (!isAuthenticated) return null;
       try {
         return await getAccessTokenSilently();
       } catch {
         return null;
       }
     });
-  }, [isAuthenticated, getAccessTokenSilently]);
+  }, [getAccessTokenSilently]);
 
   useEffect(() => {
     if (!isAuthenticated) { setUserRole(null); return; }
@@ -69,8 +68,9 @@ function App() {
                 )}
               </div>
               <div>
-                <h1 className="text-xl font-bold text-orange-500">
-                  Giants Ticket Manager
+                <h1 className="text-xl font-bold">
+                  <span className="text-sky-300">Rivas-Yee</span>{' '}
+                  <span className="text-orange-500">Giants Ticket Manager</span>
                 </h1>
                 <p className="text-xs text-gray-500">Season Ticket Management System</p>
               </div>
@@ -119,35 +119,33 @@ function App() {
                       <CalendarCheck className="w-4 h-4" />
                       My Games
                     </NavLink>
+                    <NavLink
+                      to="/admin/seats"
+                      className={({ isActive }) =>
+                        `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-orange-600/20 text-orange-400'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                        }`
+                      }
+                    >
+                      <Armchair className="w-4 h-4" />
+                      Seats
+                    </NavLink>
+                    <NavLink
+                      to="/admin/allocation"
+                      className={({ isActive }) =>
+                        `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-orange-600/20 text-orange-400'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                        }`
+                      }
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      Allocation
+                    </NavLink>
                   </>
-                )}
-                <NavLink
-                  to="/admin/seats"
-                  className={({ isActive }) =>
-                    `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-orange-600/20 text-orange-400'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`
-                  }
-                >
-                  <Armchair className="w-4 h-4" />
-                  Seats
-                </NavLink>
-                {isAuthenticated && (
-                  <NavLink
-                    to="/admin/allocation"
-                    className={({ isActive }) =>
-                      `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-orange-600/20 text-orange-400'
-                          : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                      }`
-                    }
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    Allocation
-                  </NavLink>
                 )}
               </nav>
               <div className="border-l border-gray-700 pl-4">
