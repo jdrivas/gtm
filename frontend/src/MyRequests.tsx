@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { Ticket, Trash2, Edit3, Check, X, Gift, Plus, Minus, Send, Sun, Moon, Clock } from 'lucide-react';
+import { Ticket, Trash2, Edit3, Check, X, Gift, Plus, Minus, Send, Sun, Moon, Clock, AlertTriangle } from 'lucide-react';
 import type { TicketRequest, TicketSummary, Game, GameTicketDetail, Promotion } from './types';
 import {
   fetchMyRequests,
@@ -11,6 +11,7 @@ import {
   createRequests,
   withdrawRequest,
   updateRequest,
+  releaseGameTickets,
 } from './api';
 
 const GIANTS_TEAM_NAME = 'San Francisco Giants';
@@ -39,6 +40,8 @@ export default function MyRequests() {
   const [submitting, setSubmitting] = useState(false);
   const [dayNightFilter, setDayNightFilter] = useState<'all' | 'day' | 'night'>('all');
   const [dayTypeFilter, setDayTypeFilter] = useState<'all' | 'weekday' | 'weekend'>('all');
+  const [releaseConfirm, setReleaseConfirm] = useState<{ gamePk: number; game?: Game; ticketCount: number } | null>(null);
+  const [releasing, setReleasing] = useState(false);
 
   const load = () => {
     if (!isAuthenticated) return;
@@ -121,6 +124,20 @@ export default function MyRequests() {
       return true;
     });
   }, [availableGames, dayNightFilter, dayTypeFilter]);
+
+  const handleRelease = async (gamePk: number) => {
+    setReleasing(true);
+    try {
+      await releaseGameTickets(gamePk);
+      setReleaseConfirm(null);
+      load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+      setReleaseConfirm(null);
+    } finally {
+      setReleasing(false);
+    }
+  };
 
   const handleWithdraw = async (id: number) => {
     try {
@@ -358,6 +375,16 @@ export default function MyRequests() {
                             )}
                           </div>
                         )}
+                        {(myTicketsMap[r.game_pk]?.length ?? 0) > 0 && (
+                          <button
+                            onClick={() => setReleaseConfirm({ gamePk: r.game_pk, game, ticketCount: myTicketsMap[r.game_pk].length })}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-red-400 hover:bg-red-900/20 transition-colors"
+                            title="Release tickets"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Release
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -541,6 +568,50 @@ export default function MyRequests() {
           </>
         )}
       </div>
+      {/* Release confirmation dialog */}
+      {releaseConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-900/30">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Release Tickets?</h3>
+            </div>
+            <p className="text-sm text-gray-300 mb-2">
+              You are about to release <span className="font-bold text-red-400">{releaseConfirm.ticketCount} ticket{releaseConfirm.ticketCount > 1 ? 's' : ''}</span> for:
+            </p>
+            <div className="bg-gray-800 rounded-lg p-3 mb-4">
+              <div className="text-sm font-medium text-white">
+                {releaseConfirm.game ? formatDate(releaseConfirm.game.official_date) : ''}
+              </div>
+              <div className="text-sm text-gray-400">
+                vs {releaseConfirm.game?.away_team_name ?? 'Unknown'}
+              </div>
+            </div>
+            <p className="text-xs text-yellow-400 mb-5">
+              This action cannot be undone. The tickets will be returned to the available pool and may be assigned to someone else.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setReleaseConfirm(null)}
+                disabled={releasing}
+                className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRelease(releaseConfirm.gamePk)}
+                disabled={releasing}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                {releasing ? 'Releasing…' : 'Release Tickets'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

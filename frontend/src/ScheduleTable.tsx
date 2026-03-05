@@ -598,23 +598,18 @@ function RequestCell({
     }
   };
 
-  // Has allocated tickets — bright green check + count
-  if (myTickets && myTickets.length > 0) {
-    return (
-      <span className="inline-flex items-center gap-1 text-green-400 font-medium text-xs">
-        <Check className="w-3.5 h-3.5" />
-        {myTickets.length}
-      </span>
-    );
-  }
+  const allocated = myTickets?.length ?? 0;
+  const requested = myRequest?.seats_requested ?? 0;
 
   // Has a request (not withdrawn)
   if (myRequest && myRequest.status !== 'withdrawn') {
     if (myRequest.status === 'approved') {
       return (
-        <span className="inline-flex items-center gap-1 text-emerald-300 text-xs font-medium">
-          <Check className="w-3 h-3" />
-          {myRequest.seats_approved || myRequest.seats_requested}
+        <span className="inline-flex items-center gap-1 text-xs font-medium">
+          <Check className="w-3 h-3 text-emerald-300" />
+          <span className={allocated >= requested ? 'text-green-400' : 'text-emerald-300'}>
+            {allocated}/{requested}
+          </span>
         </span>
       );
     }
@@ -622,7 +617,7 @@ function RequestCell({
       return (
         <span className="inline-flex items-center gap-1 text-yellow-400 text-xs">
           <Clock className="w-3 h-3" />
-          {myRequest.seats_requested}
+          {allocated}/{requested}
         </span>
       );
     }

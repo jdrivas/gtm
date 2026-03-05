@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.2.0] — 2026-03-05
+
+### Added
+- Allocation page redesigned with dual views: "By User" (collapsible per-user sections) and "All Games" (flat table with User column), toggled via header buttons
+- Sortable column headers on both allocation views (date, opponent, user, available, allocated) with fraction-based sorting for available/allocated columns
+- Backend endpoint `GET /api/admin/allocation/by-users` returning allocation data grouped by user
+- Release tickets button on Requests page with confirmation dialog warning that tickets will be returned to the available pool
+- Request column on Schedule page now shows allocated/requested fraction format
+
+### Changed
+- Scrape Schedule button moved into schedule filter pill row (admin-only, between My Games and game count)
+- Removed My Games page — functionality consolidated into Schedule and Requests pages
+- Removed Request Tickets button and panel from Schedule page
+
+### Fixed
+- Promos column in Request Tickets table was always empty — now loads promotions for all home games
+
 ## [v0.1.4] — 2026-03-04
 
 ### Fixed

@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
-import { CalendarDays, Armchair, LogIn, LogOut, Ticket, CalendarCheck, BarChart3, ShieldCheck } from 'lucide-react'
+import { CalendarDays, Armchair, LogIn, LogOut, Ticket, BarChart3, ShieldCheck } from 'lucide-react'
 import { setTokenGetter, fetchMe } from './api'
 import SchedulePage from './SchedulePage'
 import SeatAdmin from './SeatAdmin'
 import MyRequests from './MyRequests'
-import MyGames from './MyGames'
 import AllocationDashboard from './AllocationDashboard'
 
 function App() {
@@ -106,19 +105,6 @@ function App() {
                       Requests
                     </NavLink>
                     <NavLink
-                      to="/my/games"
-                      className={({ isActive }) =>
-                        `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-orange-600/20 text-orange-400'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                        }`
-                      }
-                    >
-                      <CalendarCheck className="w-4 h-4" />
-                      My Games
-                    </NavLink>
-                    <NavLink
                       to="/admin/seats"
                       className={({ isActive }) =>
                         `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -192,7 +178,6 @@ function App() {
           <Routes>
             <Route path="/" element={<SchedulePage userRole={userRole} />} />
             <Route path="/my/requests" element={<MyRequests />} />
-            <Route path="/my/games" element={<MyGames />} />
             <Route path="/admin/seats" element={<SeatAdmin />} />
             <Route path="/admin/allocation" element={<AllocationDashboard />} />
           </Routes>
