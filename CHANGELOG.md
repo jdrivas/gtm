@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.1.4] — 2026-03-04
+
+### Fixed
+- Auth0 config not injected on staging/prod: ServeDir was serving raw index.html bypassing runtime config injection
+
 ## [v0.1.3] — 2026-03-04
 
 ### Added
