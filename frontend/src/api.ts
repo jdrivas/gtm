@@ -1,4 +1,4 @@
-import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, MeResponse } from './types';
+import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, UserAllocationSection, MeResponse } from './types';
 
 // --- Auth-aware fetch ---
 
@@ -187,6 +187,12 @@ export async function revokeTicket(gameTicketId: number): Promise<void> {
     const text = await res.text();
     throw new Error(text || res.statusText);
   }
+}
+
+export async function fetchAllocationByUsers(): Promise<UserAllocationSection[]> {
+  const res = await authFetch('/api/admin/allocation/by-users');
+  if (!res.ok) throw new Error(`Failed to fetch allocation by users: ${res.statusText}`);
+  return res.json();
 }
 
 export async function fetchAllocationByUser(userId: number): Promise<GameTicketDetail[]> {

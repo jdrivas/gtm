@@ -8,7 +8,6 @@ import SeatAdmin from './SeatAdmin'
 import MyRequests from './MyRequests'
 import MyGames from './MyGames'
 import AllocationDashboard from './AllocationDashboard'
-import GameAllocation from './GameAllocation'
 
 function App() {
   const { isAuthenticated, isLoading, user, loginWithRedirect, logout, getAccessTokenSilently } = useAuth0()
@@ -196,7 +195,6 @@ function App() {
             <Route path="/my/games" element={<MyGames />} />
             <Route path="/admin/seats" element={<SeatAdmin />} />
             <Route path="/admin/allocation" element={<AllocationDashboard />} />
-            <Route path="/admin/allocation/:gamePk" element={<GameAllocation />} />
           </Routes>
         </main>
       </div>

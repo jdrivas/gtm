@@ -1009,6 +1009,167 @@ async fn api_admin_allocation_by_user(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
+// --- Admin: Allocation by users ---
+
+#[derive(Serialize)]
+struct UserTicketInfo {
+    ticket_id: i64,
+    section: String,
+    row: String,
+    seat: String,
+}
+
+#[derive(Serialize)]
+struct UserAllocationEntry {
+    request_id: i64,
+    game_pk: i64,
+    official_date: String,
+    away_team_name: String,
+    day_night: Option<String>,
+    seats_requested: i64,
+    seats_approved: i64,
+    status: String,
+    notes: Option<String>,
+    game_total_seats: i64,
+    game_available: i64,
+    user_tickets: Vec<UserTicketInfo>,
+}
+
+#[derive(Serialize)]
+struct UserAllocationSection {
+    user_id: i64,
+    user_name: String,
+    total_allocated: i64,
+    total_requested: i64,
+    games_allocated: i64,
+    games_requested: i64,
+    entries: Vec<UserAllocationEntry>,
+}
+
+async fn api_admin_allocation_by_users(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+) -> Result<Json<Vec<UserAllocationSection>>, (StatusCode, String)> {
+    let _user = resolve_user(&auth_user, &pool).await?;
+    require_admin(&auth_user)?;
+
+    let requests = gtm_db::list_all_active_requests(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let assigned_tickets = gtm_db::list_all_assigned_tickets(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let games = gtm_db::list_games(&pool, None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let users = gtm_db::list_users(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let summary = gtm_db::allocation_summary(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let game_map: std::collections::HashMap<i64, &gtm_models::Game> =
+        games.iter().map(|g| (g.game_pk, g)).collect();
+    let user_map: std::collections::HashMap<i64, &gtm_models::User> =
+        users.iter().map(|u| (u.id, u)).collect();
+    // game_pk -> (total_seats, assigned, available)
+    let summary_map: std::collections::HashMap<i64, (i64, i64, i64)> = summary
+        .into_iter()
+        .map(|(gp, total, assigned, available, _req)| (gp, (total, assigned, available)))
+        .collect();
+    // (user_id, game_pk) -> Vec<ticket>
+    let mut ticket_map: std::collections::HashMap<(i64, i64), Vec<&gtm_models::GameTicketDetail>> =
+        std::collections::HashMap::new();
+    for t in &assigned_tickets {
+        if let Some(uid) = t.assigned_to {
+            ticket_map.entry((uid, t.game_pk)).or_default().push(t);
+        }
+    }
+
+    // Group requests by user
+    let mut user_requests: std::collections::HashMap<i64, Vec<&gtm_models::TicketRequest>> =
+        std::collections::HashMap::new();
+    for r in &requests {
+        user_requests.entry(r.user_id).or_default().push(r);
+    }
+
+    let mut sections: Vec<UserAllocationSection> = user_requests
+        .into_iter()
+        .map(|(uid, reqs)| {
+            let user_name = user_map
+                .get(&uid)
+                .map(|u| u.name.clone())
+                .unwrap_or_default();
+
+            let entries: Vec<UserAllocationEntry> = reqs
+                .iter()
+                .map(|r| {
+                    let game = game_map.get(&r.game_pk);
+                    let (total_seats, _assigned, available) =
+                        summary_map.get(&r.game_pk).copied().unwrap_or((0, 0, 0));
+                    let user_tix = ticket_map
+                        .get(&(uid, r.game_pk))
+                        .cloned()
+                        .unwrap_or_default();
+
+                    UserAllocationEntry {
+                        request_id: r.id,
+                        game_pk: r.game_pk,
+                        official_date: game
+                            .map(|g| g.official_date.clone())
+                            .unwrap_or_default(),
+                        away_team_name: game
+                            .map(|g| g.away_team_name.clone())
+                            .unwrap_or_default(),
+                        day_night: game.and_then(|g| g.day_night.clone()),
+                        seats_requested: r.seats_requested,
+                        seats_approved: r.seats_approved,
+                        status: r.status.clone(),
+                        notes: r.notes.clone(),
+                        game_total_seats: total_seats,
+                        game_available: available,
+                        user_tickets: user_tix
+                            .iter()
+                            .map(|t| UserTicketInfo {
+                                ticket_id: t.id,
+                                section: t.section.clone(),
+                                row: t.row.clone(),
+                                seat: t.seat.clone(),
+                            })
+                            .collect(),
+                    }
+                })
+                .collect();
+
+            let total_allocated: i64 = entries
+                .iter()
+                .map(|e| e.user_tickets.len() as i64)
+                .sum();
+            let total_requested: i64 = entries.iter().map(|e| e.seats_requested).sum();
+            let games_allocated = entries
+                .iter()
+                .filter(|e| !e.user_tickets.is_empty())
+                .count() as i64;
+            let games_requested = entries.len() as i64;
+
+            UserAllocationSection {
+                user_id: uid,
+                user_name,
+                total_allocated,
+                total_requested,
+                games_allocated,
+                games_requested,
+                entries,
+            }
+        })
+        .collect();
+
+    sections.sort_by(|a, b| a.user_name.cmp(&b.user_name));
+
+    Ok(Json(sections))
+}
+
 async fn api_admin_requests(
     auth_user: AuthUser,
     State(pool): State<AnyPool>,
@@ -1090,6 +1251,10 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         .route(
             "/admin/allocation/{game_pk}",
             get(api_admin_allocation_game),
+        )
+        .route(
+            "/admin/allocation/by-users",
+            get(api_admin_allocation_by_users),
         )
         .route("/admin/allocate", post(api_admin_allocate))
         .route("/admin/allocate/{id}", delete(api_admin_revoke))

@@ -118,6 +118,38 @@ export interface MeResponse {
   role: string;
 }
 
+export interface UserTicketInfo {
+  ticket_id: number;
+  section: string;
+  row: string;
+  seat: string;
+}
+
+export interface UserAllocationEntry {
+  request_id: number;
+  game_pk: number;
+  official_date: string;
+  away_team_name: string;
+  day_night: string | null;
+  seats_requested: number;
+  seats_approved: number;
+  status: string;
+  notes: string | null;
+  game_total_seats: number;
+  game_available: number;
+  user_tickets: UserTicketInfo[];
+}
+
+export interface UserAllocationSection {
+  user_id: number;
+  user_name: string;
+  total_allocated: number;
+  total_requested: number;
+  games_allocated: number;
+  games_requested: number;
+  entries: UserAllocationEntry[];
+}
+
 export interface Promotion {
   offer_id: number;
   game_pk: number;

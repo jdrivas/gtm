@@ -518,6 +518,32 @@ pub async fn update_request_approval(
     Ok(result.rows_affected() > 0)
 }
 
+/// All non-withdrawn/declined requests (pending + approved), ordered by user then game.
+pub async fn list_all_active_requests(pool: &AnyPool) -> Result<Vec<TicketRequest>> {
+    let reqs = sqlx::query_as::<_, TicketRequest>(
+        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+         FROM ticket_requests WHERE status IN ('pending', 'approved') ORDER BY user_id, game_pk",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(reqs)
+}
+
+/// All assigned tickets across all games, with seat details.
+pub async fn list_all_assigned_tickets(pool: &AnyPool) -> Result<Vec<GameTicketDetail>> {
+    let sql = pg(
+        "SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes, gt.assigned_to \
+         FROM game_tickets gt \
+         JOIN seats s ON s.id = gt.seat_id \
+         WHERE gt.status = 'assigned' \
+         ORDER BY gt.assigned_to, gt.game_pk, s.section, s.row, s.seat",
+    );
+    let tickets = sqlx::query_as::<_, GameTicketDetail>(&sql)
+        .fetch_all(pool)
+        .await?;
+    Ok(tickets)
+}
+
 pub async fn list_tickets_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<GameTicketDetail>> {
     let sql = pg(
         "SELECT gt.id, gt.game_pk, gt.seat_id, s.section, s.row, s.seat, gt.status, gt.notes, gt.assigned_to \

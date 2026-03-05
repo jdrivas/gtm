@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, UserPlus, XCircle } from 'lucide-react';
+import { ArrowLeft, Ticket, Check, X, Lock } from 'lucide-react';
 import type { GameAllocationDetail, GameTicketWithUser, RequestWithUser } from './types';
 import { fetchGameAllocation, allocateTickets, revokeTicket, fetchMe } from './api';
+
+function seatLabel(t: GameTicketWithUser) {
+  return `${t.section}:${t.row}${t.seat}`;
+}
 
 export default function GameAllocation() {
   const { isAuthenticated } = useAuth0();
@@ -13,9 +17,12 @@ export default function GameAllocation() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [assigningTicketId, setAssigningTicketId] = useState<number | null>(null);
-  const [assignUserId, setAssignUserId] = useState<number | null>(null);
-  const [assignRequestId, setAssignRequestId] = useState<number | null>(null);
+
+  // Seat picker popup state
+  const [pickerUserId, setPickerUserId] = useState<number | null>(null);
+  const [pickerRequestId, setPickerRequestId] = useState<number | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<Record<number, 'assign' | 'revoke'>>({});
+  const [saving, setSaving] = useState(false);
 
   const load = () => {
     if (!isAuthenticated || !gamePk) return;
@@ -39,30 +46,93 @@ export default function GameAllocation() {
 
   useEffect(load, [isAuthenticated, gamePk]);
 
-  const handleAssign = async (ticketId: number) => {
-    if (!assignUserId) return;
-    try {
-      await allocateTickets([{
-        game_ticket_id: ticketId,
-        user_id: assignUserId,
-        request_id: assignRequestId ?? undefined,
-      }]);
-      setAssigningTicketId(null);
-      setAssignUserId(null);
-      setAssignRequestId(null);
-      load();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+  // Derived data
+  const { game, tickets, requests } = data ?? { game: null, tickets: [] as GameTicketWithUser[], requests: [] as RequestWithUser[] };
+
+  const totalSeats = tickets.length;
+  const assignedSeats = tickets.filter((t) => t.status === 'assigned').length;
+  const availableSeats = totalSeats - assignedSeats;
+  const totalRequested = requests.reduce((s, r) => s + r.seats_requested, 0);
+
+  // Map: userId -> tickets assigned to them
+  const userTicketsMap = useMemo(() => {
+    const m: Record<number, GameTicketWithUser[]> = {};
+    for (const t of tickets) {
+      if (t.assigned_to != null) {
+        if (!m[t.assigned_to]) m[t.assigned_to] = [];
+        m[t.assigned_to].push(t);
+      }
     }
+    return m;
+  }, [tickets]);
+
+  // Open the seat picker for a user
+  const openPicker = (userId: number, requestId: number) => {
+    setPickerUserId(userId);
+    setPickerRequestId(requestId);
+    setPendingChanges({});
   };
 
-  const handleRevoke = async (ticketId: number) => {
-    if (!confirm('Revoke this seat assignment?')) return;
+  const closePicker = () => {
+    setPickerUserId(null);
+    setPickerRequestId(null);
+    setPendingChanges({});
+  };
+
+  // Toggle a seat in the picker
+  const toggleSeat = (ticket: GameTicketWithUser) => {
+    if (pickerUserId == null) return;
+
+    setPendingChanges((prev) => {
+      const next = { ...prev };
+      if (ticket.status === 'available') {
+        // Available seat: toggle assign
+        if (next[ticket.id] === 'assign') {
+          delete next[ticket.id];
+        } else {
+          next[ticket.id] = 'assign';
+        }
+      } else if (ticket.status === 'assigned' && ticket.assigned_to === pickerUserId) {
+        // This user's seat: toggle revoke
+        if (next[ticket.id] === 'revoke') {
+          delete next[ticket.id];
+        } else {
+          next[ticket.id] = 'revoke';
+        }
+      }
+      return next;
+    });
+  };
+
+  const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+  const handleSaveChanges = async () => {
+    if (!pickerUserId || !hasPendingChanges) return;
+    setSaving(true);
     try {
-      await revokeTicket(ticketId);
+      // Process revokes first
+      for (const [ticketIdStr, action] of Object.entries(pendingChanges)) {
+        if (action === 'revoke') {
+          await revokeTicket(Number(ticketIdStr));
+        }
+      }
+      // Process assigns
+      const assigns = Object.entries(pendingChanges)
+        .filter(([, action]) => action === 'assign')
+        .map(([ticketIdStr]) => ({
+          game_ticket_id: Number(ticketIdStr),
+          user_id: pickerUserId,
+          request_id: pickerRequestId ?? undefined,
+        }));
+      if (assigns.length > 0) {
+        await allocateTickets(assigns);
+      }
+      closePicker();
       load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -75,23 +145,9 @@ export default function GameAllocation() {
   if (error) {
     return <div className="p-4 rounded-lg bg-red-900/30 border border-red-800 text-red-400">Error: {error}</div>;
   }
-  if (!isAdmin || !data) {
+  if (!isAdmin || !data || !game) {
     return <div className="text-center py-20 text-gray-500">Admin access required.</div>;
   }
-
-  const { game, tickets, requests } = data;
-
-  // Collect unique users from requests for the assign dropdown
-  const requestUsers = [...new Map(requests.map((r) => [r.user_id, r])).values()];
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'text-yellow-400';
-      case 'approved': return 'text-green-400';
-      case 'declined': return 'text-red-400';
-      default: return 'text-gray-400';
-    }
-  };
 
   return (
     <div>
@@ -102,7 +158,8 @@ export default function GameAllocation() {
         <ArrowLeft className="w-4 h-4" /> Back to Dashboard
       </button>
 
-      <div className="mb-6">
+      {/* Game header */}
+      <div className="mb-2">
         <h2 className="text-xl font-bold">
           {game.official_date}
           <span className="text-gray-400 mx-2">vs</span>
@@ -111,104 +168,219 @@ export default function GameAllocation() {
         <p className="text-sm text-gray-500 mt-1">{game.venue_name} · {game.day_night ?? ''}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Seats */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3">Seats ({tickets.length})</h3>
-          <div className="space-y-2">
-            {tickets.map((t: GameTicketWithUser) => (
-              <div key={t.id} className="border border-gray-800 rounded-lg p-3 flex items-center justify-between">
-                <div>
-                  <span className="font-mono text-sm">{t.section}:{t.row}{t.seat}</span>
-                  {t.status === 'assigned' ? (
-                    <span className="ml-2 text-sm text-green-400">→ {t.assigned_user_name}</span>
-                  ) : (
-                    <span className="ml-2 text-sm text-gray-500">available</span>
-                  )}
-                </div>
-                <div>
-                  {t.status === 'available' && (
-                    assigningTicketId === t.id ? (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={assignUserId ?? ''}
-                          onChange={(e) => {
-                            const uid = Number(e.target.value);
-                            setAssignUserId(uid || null);
-                            // Auto-select matching request
-                            const match = requests.find((r) => r.user_id === uid && r.status === 'pending');
-                            setAssignRequestId(match?.id ?? null);
-                          }}
-                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
-                        >
-                          <option value="">Select user…</option>
-                          {requestUsers.map((r) => (
-                            <option key={r.user_id} value={r.user_id}>{r.user_name}</option>
+      {/* Running totals */}
+      <div className="mb-6 text-xs text-gray-400 flex gap-6">
+        <span>Seats: <span className="text-gray-300 font-medium">{totalSeats}</span></span>
+        <span>Assigned: <span className="text-green-400 font-medium">{assignedSeats}</span></span>
+        <span>Available: <span className={`font-medium ${availableSeats > 0 ? 'text-blue-400' : 'text-gray-500'}`}>{availableSeats}</span></span>
+        <span>Requested: <span className={`font-medium ${totalRequested > availableSeats ? 'text-yellow-400' : 'text-gray-300'}`}>{totalRequested}</span></span>
+      </div>
+
+      {/* Requests table */}
+      {requests.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">No requests for this game.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 text-gray-400 text-left">
+                <th className="py-2 px-3">User</th>
+                <th className="py-2 px-3 text-center">Available</th>
+                <th className="py-2 px-3 text-center">Allocated</th>
+                <th className="py-2 px-3">Seats</th>
+                <th className="py-2 px-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((r: RequestWithUser) => {
+                const userTickets = userTicketsMap[r.user_id] ?? [];
+                const allocated = userTickets.length;
+                const fulfilled = allocated >= r.seats_requested;
+
+                return (
+                  <tr key={r.id} className="border-b border-gray-800/50 hover:bg-gray-900/50">
+                    <td className="py-2 px-3">
+                      <span className="font-medium">{r.user_name}</span>
+                      {r.notes && <span className="text-gray-500 text-xs ml-2">{r.notes}</span>}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <span className={`text-xs ${availableSeats > 0 ? 'text-blue-400' : 'text-gray-500'}`}>
+                        {availableSeats}/{totalSeats}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <span className={`text-xs font-medium ${
+                        allocated === 0
+                          ? 'text-gray-500'
+                          : fulfilled
+                            ? 'text-green-400'
+                            : 'text-yellow-400'
+                      }`}>
+                        {allocated}/{r.seats_requested}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      {userTickets.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {userTickets.map((t) => (
+                            <span key={t.id} className="font-mono text-xs px-1.5 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800/50">
+                              {seatLabel(t)}
+                            </span>
                           ))}
-                        </select>
-                        <button
-                          onClick={() => handleAssign(t.id)}
-                          disabled={!assignUserId}
-                          className="px-2 py-1 rounded text-xs bg-green-700 text-white hover:bg-green-600 disabled:opacity-50"
-                        >
-                          Assign
-                        </button>
-                        <button
-                          onClick={() => { setAssigningTicketId(null); setAssignUserId(null); }}
-                          className="px-2 py-1 rounded text-xs text-gray-400 hover:text-white"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
+                        </div>
+                      ) : (
+                        <span className="text-gray-600 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">
                       <button
-                        onClick={() => setAssigningTicketId(t.id)}
-                        className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-green-400 hover:bg-green-900/20"
+                        onClick={() => openPicker(r.user_id, r.id)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-orange-400 hover:bg-orange-900/20 transition-colors"
                       >
-                        <UserPlus className="w-3.5 h-3.5" /> Assign
+                        <Ticket className="w-3.5 h-3.5" /> Manage
                       </button>
-                    )
-                  )}
-                  {t.status === 'assigned' && (
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ===== Seat Picker Modal ===== */}
+      {pickerUserId != null && (() => {
+        const pickerUser = requests.find((r) => r.user_id === pickerUserId);
+        const userName = pickerUser?.user_name ?? 'User';
+        const requested = pickerUser?.seats_requested ?? 0;
+        const currentlyAssigned = (userTicketsMap[pickerUserId] ?? []).length;
+
+        // Compute effective state for each seat considering pending changes
+        const netAssigns = Object.values(pendingChanges).filter((a) => a === 'assign').length;
+        const netRevokes = Object.values(pendingChanges).filter((a) => a === 'revoke').length;
+        const projectedCount = currentlyAssigned + netAssigns - netRevokes;
+
+        return (
+          <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 bg-black/60 z-40" onClick={closePicker} />
+
+            {/* Modal */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm">{userName}</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Requested: {requested} · Assigned: <span className={`font-medium ${
+                        projectedCount === currentlyAssigned
+                          ? projectedCount >= requested ? 'text-green-400' : 'text-gray-300'
+                          : 'text-orange-400'
+                      }`}>{projectedCount !== currentlyAssigned ? `${currentlyAssigned} → ${projectedCount}` : currentlyAssigned}</span>
+                    </p>
+                  </div>
+                  <button onClick={closePicker} className="p-1 rounded hover:bg-gray-800 text-gray-400">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Seat list */}
+                <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
+                  {tickets.map((t) => {
+                    const isThisUser = t.assigned_to === pickerUserId;
+                    const isOtherUser = t.status === 'assigned' && !isThisUser;
+                    const isAvailable = t.status === 'available';
+                    const pending = pendingChanges[t.id];
+
+                    // Effective checked state
+                    let checked = isThisUser;
+                    if (pending === 'assign') checked = true;
+                    if (pending === 'revoke') checked = false;
+
+                    const disabled = isOtherUser;
+
+                    return (
+                      <button
+                        key={t.id}
+                        disabled={disabled}
+                        onClick={() => toggleSeat(t)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                          disabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:bg-gray-800 cursor-pointer'
+                        } ${pending ? 'bg-gray-800/50 ring-1 ring-orange-800/50' : ''}`}
+                      >
+                        {/* Checkbox */}
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                          checked
+                            ? pending === 'revoke'
+                              ? 'bg-red-600 border-red-500'
+                              : pending === 'assign'
+                                ? 'bg-orange-600 border-orange-500'
+                                : 'bg-green-600 border-green-500'
+                            : disabled
+                              ? 'border-gray-700 bg-gray-800'
+                              : 'border-gray-600'
+                        }`}>
+                          {checked && !pending && <Check className="w-3 h-3 text-white" />}
+                          {pending === 'assign' && <Check className="w-3 h-3 text-white" />}
+                          {pending === 'revoke' && <X className="w-3 h-3 text-white" />}
+                          {disabled && <Lock className="w-2.5 h-2.5 text-gray-500" />}
+                        </div>
+
+                        {/* Seat info */}
+                        <span className="font-mono text-sm flex-1">{seatLabel(t)}</span>
+
+                        {/* Status label */}
+                        {isThisUser && !pending && (
+                          <span className="text-xs text-green-400">assigned</span>
+                        )}
+                        {pending === 'assign' && (
+                          <span className="text-xs text-orange-400">+ assign</span>
+                        )}
+                        {pending === 'revoke' && (
+                          <span className="text-xs text-red-400">− revoke</span>
+                        )}
+                        {isOtherUser && (
+                          <span className="text-xs text-gray-500">{t.assigned_user_name}</span>
+                        )}
+                        {isAvailable && !pending && (
+                          <span className="text-xs text-gray-600">available</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between">
+                  <div className="text-xs text-gray-500">
+                    {hasPendingChanges
+                      ? `${Object.keys(pendingChanges).length} change${Object.keys(pendingChanges).length > 1 ? 's' : ''} pending`
+                      : 'Click seats to assign or revoke'}
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleRevoke(t.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-red-400 hover:bg-red-900/20"
+                      onClick={closePicker}
+                      className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-white hover:bg-gray-800"
                     >
-                      <XCircle className="w-3.5 h-3.5" /> Revoke
+                      Cancel
                     </button>
-                  )}
+                    <button
+                      onClick={handleSaveChanges}
+                      disabled={!hasPendingChanges || saving}
+                      className="px-3 py-1.5 rounded text-xs font-medium bg-orange-600 text-white hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {saving ? 'Saving…' : 'Apply Changes'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Requests */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3">Requests ({requests.length})</h3>
-          {requests.length === 0 ? (
-            <p className="text-gray-500 text-sm">No requests for this game.</p>
-          ) : (
-            <div className="space-y-2">
-              {requests.map((r: RequestWithUser) => (
-                <div key={r.id} className="border border-gray-800 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-medium">{r.user_name}</span>
-                      <span className="text-gray-400 ml-2">wants {r.seats_requested} seat{r.seats_requested > 1 ? 's' : ''}</span>
-                      {r.seats_approved > 0 && (
-                        <span className="text-green-400 ml-2">(got {r.seats_approved})</span>
-                      )}
-                    </div>
-                    <span className={`text-xs font-medium ${statusColor(r.status)}`}>{r.status}</span>
-                  </div>
-                  {r.notes && <p className="text-xs text-gray-500 mt-1">{r.notes}</p>}
-                </div>
-              ))}
             </div>
-          )}
-        </div>
-      </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
