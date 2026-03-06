@@ -1,12 +1,8 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '*.md'
-      - '.windsurf/**'
-      - 'infra/**'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       environment:
@@ -50,15 +46,20 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Download binary from latest release
+      - name: Download binary from release
         run: |
-          RELEASE_TAG=$(gh release view --json tagName -q .tagName)
+          if [ -n "$RELEASE_TAG_NAME" ]; then
+            RELEASE_TAG="$RELEASE_TAG_NAME"
+          else
+            RELEASE_TAG=$(gh release view --json tagName -q .tagName)
+          fi
           echo "Using release: ${RELEASE_TAG}"
           mkdir -p bin
           gh release download "${RELEASE_TAG}" --pattern "gtm" --dir bin
           chmod +x bin/gtm
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
 
       - name: Build and push Docker image
         env:
