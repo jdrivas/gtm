@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { BarChart3, Ticket, Check, X, Lock, ChevronDown, ChevronRight, User, CalendarDays } from 'lucide-react';
 import type { UserAllocationSection, UserAllocationEntry, UserTicketInfo, GameAllocationDetail, GameTicketWithUser } from './types';
 import { fetchAllocationByUsers, fetchGameAllocation, allocateTickets, revokeTicket, fetchMe } from './api';
+import useAutoRefresh from './useAutoRefresh';
 
 function seatLabel(t: { section: string; row: string; seat: string }) {
   return `${t.section}:${t.row}${t.seat}`;
@@ -46,14 +47,14 @@ export default function AllocationDashboard() {
   const [pendingChanges, setPendingChanges] = useState<Record<number, 'assign' | 'revoke'>>({});
   const [saving, setSaving] = useState(false);
 
-  const loadData = () => {
+  const loadData = useCallback((silent = false) => {
     if (!isAuthenticated) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     fetchMe()
       .then((me) => {
         setIsAdmin(me.role === 'admin');
         if (me.role !== 'admin') {
-          setLoading(false);
+          if (!silent) setLoading(false);
           return;
         }
         return fetchAllocationByUsers()
@@ -63,12 +64,13 @@ export default function AllocationDashboard() {
             setExpandedUsers(new Set(data.map((s) => s.user_id)));
           })
           .catch((err) => setError(err.message))
-          .finally(() => setLoading(false));
+          .finally(() => { if (!silent) setLoading(false); });
       })
-      .catch(() => setLoading(false));
-  };
+      .catch(() => { if (!silent) setLoading(false); });
+  }, [isAuthenticated]);
 
-  useEffect(loadData, [isAuthenticated]);
+  useEffect(() => loadData(), [loadData]);
+  useAutoRefresh(() => loadData(true));
 
   const toggleUser = (userId: number) => {
     setExpandedUsers((prev) => {
