@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Ticket, Check, X, Lock } from 'lucide-react';
 import type { GameAllocationDetail, GameTicketWithUser, RequestWithUser } from './types';
 import { fetchGameAllocation, allocateTickets, revokeTicket, fetchMe } from './api';
+import useAutoRefresh from './useAutoRefresh';
 
 function seatLabel(t: GameTicketWithUser) {
   return `${t.section}:${t.row}${t.seat}`;
@@ -24,27 +25,28 @@ export default function GameAllocation() {
   const [pendingChanges, setPendingChanges] = useState<Record<number, 'assign' | 'revoke'>>({});
   const [saving, setSaving] = useState(false);
 
-  const load = () => {
+  const load = useCallback((silent = false) => {
     if (!isAuthenticated || !gamePk) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     fetchMe()
       .then((me) => {
         setIsAdmin(me.role === 'admin');
         if (me.role !== 'admin') {
-          setLoading(false);
+          if (!silent) setLoading(false);
           return;
         }
         return fetchGameAllocation(Number(gamePk))
           .then(setData)
           .catch((err) => setError(err.message))
-          .finally(() => setLoading(false));
+          .finally(() => { if (!silent) setLoading(false); });
       })
       .catch(() => {
-        setLoading(false);
+        if (!silent) setLoading(false);
       });
-  };
+  }, [isAuthenticated, gamePk]);
 
-  useEffect(load, [isAuthenticated, gamePk]);
+  useEffect(() => load(), [load]);
+  useAutoRefresh(() => load(true));
 
   // Derived data
   const { game, tickets, requests } = data ?? { game: null, tickets: [] as GameTicketWithUser[], requests: [] as RequestWithUser[] };
