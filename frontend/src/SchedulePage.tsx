@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { RefreshCw } from 'lucide-react';
 import type { Game, TicketSummary, TicketRequest, GameTicketDetail } from './types';
 import { fetchGames, fetchTicketSummary, fetchMyRequests, fetchMyGames, scrapeSchedule } from './api';
 import ScheduleTable from './ScheduleTable';
+import useAutoRefresh from './useAutoRefresh';
 
 interface SchedulePageProps {
   userRole: string | null;
@@ -21,9 +22,10 @@ export default function SchedulePage({ userRole }: SchedulePageProps) {
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<string | null>(null);
 
-  const loadData = () => {
+  const loadData = useCallback((silent = false) => {
     // Wait for Auth0 to finish initializing before fetching
     if (authLoading) return;
+    if (!silent) setLoading(true);
 
     const fetches: [Promise<Game[]>, Promise<TicketSummary[]>, Promise<TicketRequest[]>, Promise<GameTicketDetail[]>] = [
       fetchGames(),
@@ -49,9 +51,10 @@ export default function SchedulePage({ userRole }: SchedulePageProps) {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, [isAuthenticated, authLoading]);
 
-  useEffect(loadData, [isAuthenticated, authLoading]);
+  useEffect(() => loadData(), [loadData]);
+  useAutoRefresh(() => loadData(true));
 
   const seasons = useMemo(
     () => [...new Set(games.map((g) => g.season))].sort(),

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Ticket, Trash2, Edit3, Check, X, Gift, Plus, Minus, Send, Sun, Moon, Clock, AlertTriangle } from 'lucide-react';
 import type { TicketRequest, TicketSummary, Game, GameTicketDetail, Promotion } from './types';
@@ -13,6 +13,7 @@ import {
   updateRequest,
   releaseGameTickets,
 } from './api';
+import useAutoRefresh from './useAutoRefresh';
 
 const GIANTS_TEAM_NAME = 'San Francisco Giants';
 
@@ -43,9 +44,9 @@ export default function MyRequests() {
   const [releaseConfirm, setReleaseConfirm] = useState<{ gamePk: number; game?: Game; ticketCount: number } | null>(null);
   const [releasing, setReleasing] = useState(false);
 
-  const load = () => {
+  const load = useCallback((silent = false) => {
     if (!isAuthenticated) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     Promise.all([fetchMyRequests(), fetchGames(), fetchTicketSummary(), fetchMyGames()])
       .then(([reqs, gameList, summaryList, myGameTickets]) => {
         setRequests(reqs);
@@ -66,9 +67,10 @@ export default function MyRequests() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, [isAuthenticated]);
 
-  useEffect(load, [isAuthenticated]);
+  useEffect(() => load(), [load]);
+  useAutoRefresh(() => load(true));
 
   // Load promos for all relevant games (requested + available)
   useEffect(() => {
