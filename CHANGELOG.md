@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.2.1] — 2026-03-19
+
+### Added
+- Auto-refresh: pages silently re-fetch data on tab focus and every 60 seconds
+- Shared `useAutoRefresh` hook for consistent multi-user data coordination
+- Silent refresh mode (no loading spinner) for background data updates
+
 ## [v0.2.0] — 2026-03-05
 
 ### Added
