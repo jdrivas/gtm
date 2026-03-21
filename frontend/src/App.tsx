@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { useAuth0 } from '@auth0/auth0-react'
-import { CalendarDays, Armchair, LogIn, LogOut, Ticket, BarChart3, ShieldCheck } from 'lucide-react'
+import { CalendarDays, Armchair, LogIn, LogOut, Ticket, BarChart3, ShieldCheck, Menu, KeyRound } from 'lucide-react'
 import { setTokenGetter, fetchMe } from './api'
 import SchedulePage from './SchedulePage'
 import SeatAdmin from './SeatAdmin'
@@ -12,8 +12,9 @@ function App() {
   const { isAuthenticated, isLoading, user, loginWithRedirect, logout, getAccessTokenSilently } = useAuth0()
   const [userRole, setUserRole] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [showVersion, setShowVersion] = useState(false)
-  const versionRef = useRef<HTMLDivElement>(null)
+  const [showMenu, setShowMenu] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setTokenGetter(async () => {
@@ -37,13 +38,42 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!showVersion) return;
+    if (!showMenu) return;
     const handler = (e: MouseEvent) => {
-      if (versionRef.current && !versionRef.current.contains(e.target as Node)) setShowVersion(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showVersion]);
+  }, [showMenu]);
+
+  const gtmConfig = (window as any).__GTM_CONFIG__ || {
+    auth0_domain: import.meta.env.VITE_AUTH0_DOMAIN,
+    auth0_client_id: import.meta.env.VITE_AUTH0_CLIENT_ID,
+  };
+
+  const handleChangePassword = async () => {
+    if (!user?.email) return;
+    try {
+      const res = await fetch(`https://${gtmConfig.auth0_domain}/dbconnections/change_password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: gtmConfig.auth0_client_id,
+          email: user.email,
+          connection: 'Username-Password-Authentication',
+        }),
+      });
+      if (res.ok) {
+        setPasswordMsg('Password reset email sent');
+      } else {
+        setPasswordMsg('Failed to send reset email');
+      }
+    } catch {
+      setPasswordMsg('Failed to send reset email');
+    }
+    setShowMenu(false);
+    setTimeout(() => setPasswordMsg(null), 4000);
+  };
 
   return (
     <BrowserRouter>
@@ -52,18 +82,8 @@ function App() {
         <header className="border-b border-gray-800 bg-gray-950">
           <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div ref={versionRef} className="relative">
-                <div
-                  onClick={() => setShowVersion(!showVersion)}
-                  className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-black font-black text-lg cursor-pointer select-none hover:bg-orange-400 transition-colors"
-                >
-                  SF
-                </div>
-                {showVersion && appVersion && (
-                  <div className="absolute top-12 left-0 z-50 px-3 py-1.5 rounded bg-gray-800 border border-gray-700 shadow-lg whitespace-nowrap">
-                    <span className="text-xs text-gray-400">v{appVersion}</span>
-                  </div>
-                )}
+              <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-black font-black text-lg select-none">
+                SF
               </div>
               <div>
                 <h1 className="text-xl font-bold">
@@ -151,13 +171,42 @@ function App() {
                     {userRole && userRole !== 'admin' && (
                       <span className="text-[10px] text-gray-500">{userRole}</span>
                     )}
-                    <button
-                      onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      Logout
-                    </button>
+                    <div ref={menuRef} className="relative">
+                      <button
+                        onClick={() => setShowMenu(!showMenu)}
+                        className="flex items-center justify-center w-8 h-8 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                      >
+                        <Menu className="w-4 h-4" />
+                      </button>
+                      {showMenu && (
+                        <div className="absolute right-0 top-10 z-50 w-48 rounded-lg bg-gray-800 border border-gray-700 shadow-lg py-1">
+                          <button
+                            onClick={handleChangePassword}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            Change Password
+                          </button>
+                          <button
+                            onClick={() => { setShowMenu(false); logout({ logoutParams: { returnTo: window.location.origin } }); }}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            Logout
+                          </button>
+                          {appVersion && (
+                            <div className="border-t border-gray-700 mt-1 pt-1 px-3 py-1">
+                              <span className="text-[10px] text-gray-500">v{appVersion}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {passwordMsg && (
+                      <span className={`text-xs ${passwordMsg.includes('sent') ? 'text-green-400' : 'text-red-400'}`}>
+                        {passwordMsg}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <button
