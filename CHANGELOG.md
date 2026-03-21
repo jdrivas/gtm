@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.2.4] — 2026-03-21
+
+### Fixed
+- Auth0 connection name corrected to 'GTM-users' for password reset
+- Improved error display with proper toast notifications
+
 ## [v0.2.3] — 2026-03-21
 
 ### Fixed
