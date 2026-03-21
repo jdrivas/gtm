@@ -63,16 +63,21 @@ function App() {
           connection: 'Username-Password-Authentication',
         }),
       });
+      const body = await res.text();
+      console.log('Auth0 change_password response:', res.status, body);
       if (res.ok) {
-        setPasswordMsg('Password reset email sent');
+        setPasswordMsg('Password reset email sent — check your inbox');
       } else {
-        setPasswordMsg('Failed to send reset email');
+        let detail = res.statusText;
+        try { detail = JSON.parse(body).description || detail; } catch { /* use statusText */ }
+        setPasswordMsg(`Password reset failed: ${detail}`);
       }
-    } catch {
-      setPasswordMsg('Failed to send reset email');
+    } catch (err) {
+      console.error('Change password error:', err);
+      setPasswordMsg(`Password reset failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     setShowMenu(false);
-    setTimeout(() => setPasswordMsg(null), 4000);
+    setTimeout(() => setPasswordMsg(null), 8000);
   };
 
   return (
@@ -202,11 +207,6 @@ function App() {
                         </div>
                       )}
                     </div>
-                    {passwordMsg && (
-                      <span className={`text-xs ${passwordMsg.includes('sent') ? 'text-green-400' : 'text-red-400'}`}>
-                        {passwordMsg}
-                      </span>
-                    )}
                   </div>
                 ) : (
                   <button
@@ -221,6 +221,18 @@ function App() {
             </div>
           </div>
         </header>
+
+        {/* Toast notification */}
+        {passwordMsg && (
+          <div className={`fixed top-4 right-4 z-[100] max-w-sm rounded-lg border px-4 py-3 shadow-lg text-sm flex items-start gap-3 ${
+            passwordMsg.includes('sent')
+              ? 'bg-green-900/90 border-green-700 text-green-200'
+              : 'bg-red-900/90 border-red-700 text-red-200'
+          }`}>
+            <span className="flex-1">{passwordMsg}</span>
+            <button onClick={() => setPasswordMsg(null)} className="text-current opacity-60 hover:opacity-100 font-bold">×</button>
+          </div>
+        )}
 
         {/* Main content */}
         <main className="max-w-[1600px] mx-auto px-6 py-6">
