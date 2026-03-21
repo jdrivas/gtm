@@ -60,7 +60,7 @@ function App() {
         body: JSON.stringify({
           client_id: gtmConfig.auth0_client_id,
           email: user.email,
-          connection: 'Username-Password-Authentication',
+          connection: 'GTM-users',
         }),
       });
       const body = await res.text();
@@ -68,8 +68,9 @@ function App() {
       if (res.ok) {
         setPasswordMsg('Password reset email sent — check your inbox');
       } else {
-        let detail = res.statusText;
-        try { detail = JSON.parse(body).description || detail; } catch { /* use statusText */ }
+        let detail = '';
+        try { detail = JSON.parse(body).description; } catch { /* not JSON */ }
+        if (!detail) detail = body || res.statusText || `HTTP ${res.status}`;
         setPasswordMsg(`Password reset failed: ${detail}`);
       }
     } catch (err) {
