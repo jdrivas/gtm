@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.2.3] — 2026-03-21
+
+### Fixed
+- Password reset messages now display as a toast notification instead of overflowing the header
+- Auth0 error responses parsed to show human-readable description
+
 ## [v0.2.2] — 2026-03-21
 
 ### Changed
