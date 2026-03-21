@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.2.2] — 2026-03-21
+
+### Changed
+- Replaced Logout button with hamburger dropdown menu containing Change Password, Logout, and version number
+- Version number moved from SF logo popup into the user menu
+
+### Added
+- Change Password option sends Auth0 password reset email directly from the app
+
 ## [v0.2.1] — 2026-03-19
 
 ### Added
