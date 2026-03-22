@@ -250,7 +250,9 @@ Deferred — users request tickets directly (no family grouping needed yet).
 
 Open items for future work (not prioritized):
 
-- **Production environment** — `infra/environments/prod.tfvars` exists but prod is not deployed yet; image promotion from staging
+- **Export allocations** — Let users download their current allocations as a CSV or Excel (.xlsx) file from the My Tickets page. Include game date, opponent, seat details, and status.
+- **Calendar integration** — Let users add their allocated games to their calendar. Options to explore: .ics file download (universal — works with Apple Calendar, Google Calendar, Outlook), Google Calendar API direct add, and/or a subscribable calendar feed URL.
+- **Admin user panel** — Admin-only page showing all users with last login date, games/seats requested, and games/seats allocated. Gives admins a quick overview of user activity and demand.
 - **Family grouping** (2d-families) — group users into families for ticket allocation; deferred until needed
 - **Frontend polish** — mobile responsiveness, loading skeletons, error boundaries
 - **Monitoring** — CloudWatch alarms, uptime checks, error rate alerting
