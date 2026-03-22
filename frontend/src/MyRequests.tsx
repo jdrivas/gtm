@@ -428,7 +428,7 @@ export default function MyRequests() {
 
       {/* ===== Section 2: Bulk Request ===== */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-2">
           <div>
             <div className="flex items-center gap-2">
               <Plus className="w-5 h-5 text-orange-500" />
@@ -442,52 +442,7 @@ export default function MyRequests() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              {(['all', 'shortlisted'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setShortlistFilter(v)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                    shortlistFilter === v
-                      ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
-                  }`}
-                >
-                  {v === 'all' ? 'All' : '★ Shortlisted'}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {(['all', 'day', 'night'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setDayNightFilter(v)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                    dayNightFilter === v
-                      ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
-                  }`}
-                >
-                  {v === 'all' ? 'All' : v === 'day' ? '☀ Day' : '☽ Night'}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {(['all', 'weekday', 'weekend'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setDayTypeFilter(v)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                    dayTypeFilter === v
-                      ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
-                  }`}
-                >
-                  {v === 'all' ? 'All' : v === 'weekday' ? 'Weekday' : 'Weekend'}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400">Default seats:</span>
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-800 border border-gray-700">
               <button
@@ -504,6 +459,55 @@ export default function MyRequests() {
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <div className="flex items-center gap-1">
+            {(['all', 'shortlisted'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setShortlistFilter(v)}
+                className={`px-2 py-0.5 rounded text-[0.65rem] font-medium transition-colors ${
+                  shortlistFilter === v
+                    ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
+                }`}
+              >
+                {v === 'all' ? 'All' : '★ Shortlisted'}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-4 bg-gray-700" />
+          <div className="flex items-center gap-1">
+            {(['all', 'day', 'night'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setDayNightFilter(v)}
+                className={`px-2 py-0.5 rounded text-[0.65rem] font-medium transition-colors ${
+                  dayNightFilter === v
+                    ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
+                }`}
+              >
+                {v === 'all' ? 'All' : v === 'day' ? '☀ Day' : '☽ Night'}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-4 bg-gray-700" />
+          <div className="flex items-center gap-1">
+            {(['all', 'weekday', 'weekend'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setDayTypeFilter(v)}
+                className={`px-2 py-0.5 rounded text-[0.65rem] font-medium transition-colors ${
+                  dayTypeFilter === v
+                    ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
+                }`}
+              >
+                {v === 'all' ? 'All' : v === 'weekday' ? 'Weekday' : 'Weekend'}
+              </button>
+            ))}
           </div>
         </div>
 
