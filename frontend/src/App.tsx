@@ -7,6 +7,7 @@ import SchedulePage from './SchedulePage'
 import SeatAdmin from './SeatAdmin'
 import MyRequests from './MyRequests'
 import AllocationDashboard from './AllocationDashboard'
+import MyAllocations from './MyAllocations'
 
 function App() {
   const { isAuthenticated, isLoading, user, loginWithRedirect, logout, getAccessTokenSilently } = useAuth0()
@@ -131,6 +132,23 @@ function App() {
                       Requests
                     </NavLink>
                     <NavLink
+                      to="/my/allocations"
+                      className={({ isActive }) =>
+                        `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-orange-600/20 text-orange-400'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                        }`
+                      }
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      My Tickets
+                    </NavLink>
+                  </>
+                )}
+                {userRole === 'admin' && (
+                  <>
+                    <NavLink
                       to="/admin/seats"
                       className={({ isActive }) =>
                         `flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -240,6 +258,7 @@ function App() {
           <Routes>
             <Route path="/" element={<SchedulePage userRole={userRole} />} />
             <Route path="/my/requests" element={<MyRequests />} />
+            <Route path="/my/allocations" element={<MyAllocations />} />
             <Route path="/admin/seats" element={<SeatAdmin />} />
             <Route path="/admin/allocation" element={<AllocationDashboard />} />
           </Routes>
