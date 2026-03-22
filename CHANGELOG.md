@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.2.5] — 2026-03-21
+
+### Added
+- My Tickets page showing allocated seats and pending requests with release/withdraw actions
+- Role-based navigation: non-admin users see Schedule, Requests, and My Tickets; admins see all
+
+### Fixed
+- Seats and Allocation nav links no longer visible to non-admin users
+
 ## [v0.2.4] — 2026-03-21
 
 ### Fixed
