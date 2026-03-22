@@ -70,7 +70,7 @@ export default function MyRequests() {
         }
         setMyTicketsMap(tMap);
         const tagM: Record<number, { shortlist: boolean; cantGo: boolean }> = {};
-        for (const t of gameTags) tagM[t.game_pk] = { shortlist: t.shortlist, cantGo: t.cant_go };
+        for (const t of gameTags) tagM[t.game_pk] = { shortlist: !!t.shortlist, cantGo: !!t.cant_go };
         setTagsMap(tagM);
         setSelections({});
       })
