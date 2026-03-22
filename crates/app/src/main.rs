@@ -1273,7 +1273,10 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         .route("/my/games/{game_pk}/release", post(api_my_games_release))
         // Member: game tags (shortlist / can't go)
         .route("/my/game-tags", get(api_my_game_tags))
-        .route("/my/game-tags/{game_pk}", axum::routing::put(api_my_game_tags_put))
+        .route(
+            "/my/game-tags/{game_pk}",
+            axum::routing::put(api_my_game_tags_put),
+        )
         // Admin: allocation
         .route("/admin/allocation", get(api_admin_allocation))
         .route(

@@ -585,11 +585,9 @@ pub async fn allocation_summary(pool: &AnyPool) -> Result<Vec<(i64, i64, i64, i6
 // --- User Game Tags ---
 
 pub async fn list_game_tags_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<GameTag>> {
-    let sql = pg(
-        "SELECT user_id, game_pk, shortlist, cant_go \
+    let sql = pg("SELECT user_id, game_pk, shortlist, cant_go \
          FROM user_game_tags \
-         WHERE user_id = ?",
-    );
+         WHERE user_id = ?");
     let tags = sqlx::query_as::<_, GameTag>(&sql)
         .bind(user_id)
         .fetch_all(pool)
