@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { Ticket, Trash2, Edit3, Check, X, Gift, Plus, Minus, Send, Sun, Moon, Clock, AlertTriangle } from 'lucide-react';
+import { Ticket, Trash2, Edit3, Check, X, Gift, Plus, Minus, Send, Sun, Moon, Clock, AlertTriangle, Star, Ban } from 'lucide-react';
 import type { TicketRequest, TicketSummary, Game, GameTicketDetail, Promotion } from './types';
 import {
   fetchMyRequests,
@@ -8,6 +8,8 @@ import {
   fetchGames,
   fetchTicketSummary,
   fetchPromotions,
+  fetchMyGameTags,
+  setGameTag,
   createRequests,
   withdrawRequest,
   updateRequest,
@@ -35,10 +37,14 @@ export default function MyRequests() {
   const [editSeats, setEditSeats] = useState(1);
   const [promoMap, setPromoMap] = useState<Record<number, Promotion[]>>({});
 
+  // Game tags (shortlist / can't go)
+  const [tagsMap, setTagsMap] = useState<Record<number, { shortlist: boolean; cantGo: boolean }>>({});
+
   // Bulk request state
   const [selections, setSelections] = useState<Record<number, number>>({});
   const [defaultSeats, setDefaultSeats] = useState(2);
   const [submitting, setSubmitting] = useState(false);
+  const [shortlistFilter, setShortlistFilter] = useState<'all' | 'shortlisted'>('all');
   const [dayNightFilter, setDayNightFilter] = useState<'all' | 'day' | 'night'>('all');
   const [dayTypeFilter, setDayTypeFilter] = useState<'all' | 'weekday' | 'weekend'>('all');
   const [releaseConfirm, setReleaseConfirm] = useState<{ gamePk: number; game?: Game; ticketCount: number } | null>(null);
@@ -47,8 +53,8 @@ export default function MyRequests() {
   const load = useCallback((silent = false) => {
     if (!isAuthenticated) return;
     if (!silent) setLoading(true);
-    Promise.all([fetchMyRequests(), fetchGames(), fetchTicketSummary(), fetchMyGames()])
-      .then(([reqs, gameList, summaryList, myGameTickets]) => {
+    Promise.all([fetchMyRequests(), fetchGames(), fetchTicketSummary(), fetchMyGames(), fetchMyGameTags()])
+      .then(([reqs, gameList, summaryList, myGameTickets, gameTags]) => {
         setRequests(reqs);
         setAllGames(gameList);
         const gMap: Record<number, Game> = {};
@@ -63,6 +69,9 @@ export default function MyRequests() {
           tMap[t.game_pk].push(t);
         }
         setMyTicketsMap(tMap);
+        const tagM: Record<number, { shortlist: boolean; cantGo: boolean }> = {};
+        for (const t of gameTags) tagM[t.game_pk] = { shortlist: t.shortlist, cantGo: t.cant_go };
+        setTagsMap(tagM);
         setSelections({});
       })
       .catch((err) => setError(err.message))
@@ -116,6 +125,10 @@ export default function MyRequests() {
 
   const filteredGames = useMemo(() => {
     return availableGames.filter((g) => {
+      if (shortlistFilter === 'shortlisted') {
+        const tag = tagsMap[g.game_pk];
+        if (!tag?.shortlist || tag?.cantGo) return false;
+      }
       if (dayNightFilter !== 'all' && g.day_night !== dayNightFilter) return false;
       if (dayTypeFilter !== 'all') {
         const dow = new Date(g.official_date + 'T00:00:00').getDay();
@@ -125,7 +138,23 @@ export default function MyRequests() {
       }
       return true;
     });
-  }, [availableGames, dayNightFilter, dayTypeFilter]);
+  }, [availableGames, shortlistFilter, tagsMap, dayNightFilter, dayTypeFilter]);
+
+  const toggleTag = (gamePk: number, field: 'shortlist' | 'cantGo') => {
+    setTagsMap((prev) => {
+      const cur = prev[gamePk] ?? { shortlist: false, cantGo: false };
+      const next = { ...cur, [field]: !cur[field] };
+      // Optimistic update
+      const updated = { ...prev, [gamePk]: next };
+      if (!next.shortlist && !next.cantGo) delete updated[gamePk];
+      // Fire API call in background
+      setGameTag(gamePk, next.shortlist, next.cantGo).catch(() => {
+        // Revert on failure
+        setTagsMap((p) => ({ ...p, [gamePk]: cur }));
+      });
+      return updated;
+    });
+  };
 
   const handleRelease = async (gamePk: number) => {
     setReleasing(true);
@@ -415,6 +444,21 @@ export default function MyRequests() {
           </div>
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-1.5">
+              {(['all', 'shortlisted'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setShortlistFilter(v)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    shortlistFilter === v
+                      ? 'bg-orange-600/20 text-orange-400 border border-orange-800/50'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
+                  }`}
+                >
+                  {v === 'all' ? 'All' : '★ Shortlisted'}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5">
               {(['all', 'day', 'night'] as const).map((v) => (
                 <button
                   key={v}
@@ -486,17 +530,25 @@ export default function MyRequests() {
                     <th className="py-2 px-3 text-center">D/N</th>
                     <th className="py-2 px-3 text-center">Available</th>
                     <th className="py-2 px-3">Promos</th>
+                    <th className="py-2 px-1 text-center w-8" title="Shortlist"><Star className="w-3.5 h-3.5 inline text-gray-500" /></th>
+                    <th className="py-2 px-1 text-center w-8" title="Can't Go"><Ban className="w-3.5 h-3.5 inline text-gray-500" /></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredGames.map((g) => {
                     const isSelected = selections[g.game_pk] !== undefined;
                     const summary = ticketSummary[g.game_pk];
+                    const tag = tagsMap[g.game_pk];
+                    const isShortlisted = !!tag?.shortlist;
+                    const isCantGo = !!tag?.cantGo;
                     return (
                       <tr
                         key={g.game_pk}
                         className={`border-b border-gray-800/50 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-orange-900/10' : 'hover:bg-gray-900/50'
+                          isCantGo ? 'opacity-40' :
+                          isSelected ? 'bg-orange-900/10' :
+                          isShortlisted ? 'border-l-2 border-l-orange-500' :
+                          'hover:bg-gray-900/50'
                         }`}
                         onClick={() => toggleSelect(g.game_pk)}
                       >
@@ -509,7 +561,7 @@ export default function MyRequests() {
                           />
                         </td>
                         <td className="py-2 px-3 whitespace-nowrap font-medium">{formatDate(g.official_date)}</td>
-                        <td className="py-2 px-3">{g.away_team_name}</td>
+                        <td className={`py-2 px-3${isCantGo ? ' line-through' : ''}`}>{g.away_team_name}</td>
                         <td className="py-2 px-3 text-center">
                           {g.day_night === 'night' ? (
                             <Moon className="w-3.5 h-3.5 text-indigo-400 inline" />
@@ -541,6 +593,32 @@ export default function MyRequests() {
                               <span className="text-gray-600">—</span>
                             );
                           })()}
+                        </td>
+                        <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => toggleTag(g.game_pk, 'shortlist')}
+                            className={`p-1 rounded transition-colors ${
+                              isShortlisted
+                                ? 'text-orange-400 hover:text-orange-300'
+                                : 'text-gray-700 hover:text-gray-400'
+                            }`}
+                            title={isShortlisted ? 'Remove from shortlist' : 'Add to shortlist'}
+                          >
+                            <Star className={`w-4 h-4${isShortlisted ? ' fill-current' : ''}`} />
+                          </button>
+                        </td>
+                        <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => toggleTag(g.game_pk, 'cantGo')}
+                            className={`p-1 rounded transition-colors ${
+                              isCantGo
+                                ? 'text-red-400 hover:text-red-300'
+                                : 'text-gray-700 hover:text-gray-400'
+                            }`}
+                            title={isCantGo ? "Remove can't go" : "Mark as can't go"}
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     );

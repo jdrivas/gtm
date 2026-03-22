@@ -1,5 +1,5 @@
 use anyhow::Result;
-use gtm_models::{Game, GameTicketDetail, Promotion, Seat, TicketRequest, User};
+use gtm_models::{Game, GameTag, GameTicketDetail, Promotion, Seat, TicketRequest, User};
 use sqlx::AnyPool;
 use std::sync::OnceLock;
 use tracing::info;
@@ -580,4 +580,55 @@ pub async fn allocation_summary(pool: &AnyPool) -> Result<Vec<(i64, i64, i64, i6
         .fetch_all(pool)
         .await?;
     Ok(rows)
+}
+
+// --- User Game Tags ---
+
+pub async fn list_game_tags_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<GameTag>> {
+    let sql = pg(
+        "SELECT user_id, game_pk, shortlist, cant_go \
+         FROM user_game_tags \
+         WHERE user_id = ?",
+    );
+    let tags = sqlx::query_as::<_, GameTag>(&sql)
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(tags)
+}
+
+pub async fn upsert_game_tag(
+    pool: &AnyPool,
+    user_id: i64,
+    game_pk: i64,
+    shortlist: bool,
+    cant_go: bool,
+) -> Result<()> {
+    if !shortlist && !cant_go {
+        // Both false — delete the row
+        let sql = pg("DELETE FROM user_game_tags WHERE user_id = ? AND game_pk = ?");
+        sqlx::query(&sql)
+            .bind(user_id)
+            .bind(game_pk)
+            .execute(pool)
+            .await?;
+    } else {
+        let sl = if shortlist { 1i64 } else { 0 };
+        let cg = if cant_go { 1i64 } else { 0 };
+        let sql = pg(
+            "INSERT INTO user_game_tags (user_id, game_pk, shortlist, cant_go) \
+             VALUES (?, ?, ?, ?) \
+             ON CONFLICT (user_id, game_pk) DO UPDATE SET shortlist = ?, cant_go = ?",
+        );
+        sqlx::query(&sql)
+            .bind(user_id)
+            .bind(game_pk)
+            .bind(sl)
+            .bind(cg)
+            .bind(sl)
+            .bind(cg)
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
 }

@@ -164,3 +164,10 @@ export interface Promotion {
   image_url: string | null;
   display_order: number;
 }
+
+export interface GameTag {
+  user_id: number;
+  game_pk: number;
+  shortlist: boolean;
+  cant_go: boolean;
+}
