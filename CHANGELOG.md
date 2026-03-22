@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.3.0] — 2026-03-21
+
+### Added
+- Game triage on Requests page: ★ Shortlist and 🚫 Can't Go tag columns per game
+- Shortlist filter toggle to show only shortlisted (non-blocked) games
+- Tags persist in database across sessions and devices
+- New `user_game_tags` table, API endpoints, and optimistic UI updates
+
 ## [v0.2.5] — 2026-03-21
 
 ### Added
