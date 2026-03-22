@@ -55,7 +55,7 @@ export default function MyRequests() {
     if (!silent) setLoading(true);
     Promise.all([fetchMyRequests(), fetchGames(), fetchTicketSummary(), fetchMyGames(), fetchMyGameTags()])
       .then(([reqs, gameList, summaryList, myGameTickets, gameTags]) => {
-        setRequests(reqs);
+        setRequests(reqs.filter((r) => r.status !== 'withdrawn'));
         setAllGames(gameList);
         const gMap: Record<number, Game> = {};
         for (const g of gameList) gMap[g.game_pk] = g;

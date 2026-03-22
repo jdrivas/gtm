@@ -77,6 +77,7 @@ export default function MyAllocations() {
           tickets,
         };
       })
+      .filter((r) => r.tickets.length > 0 || (r.requestStatus && r.requestStatus !== 'withdrawn'))
       .sort((a, b) => a.officialDate.localeCompare(b.officialDate));
   }, [requests, myTickets, gameMap, ticketsByGame]);
 
@@ -211,7 +212,7 @@ export default function MyAllocations() {
                           Release
                         </button>
                       )}
-                      {row.tickets.length === 0 && row.requestId && (
+                      {row.tickets.length === 0 && row.requestId && row.requestStatus === 'pending' && (
                         <button
                           onClick={() => setWithdrawConfirm({ requestId: row.requestId!, opponent: row.opponent, seats: row.seatsRequested })}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-colors"

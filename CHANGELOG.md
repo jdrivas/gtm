@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.3.2] — 2026-03-21
+
+### Fixed
+- Releasing tickets now also withdraws the associated request
+- Hide withdrawn requests from Requests page and My Tickets page
+- Only show Withdraw button for pending requests on My Tickets
+
 ## [v0.3.1] — 2026-03-21
 
 ### Changed

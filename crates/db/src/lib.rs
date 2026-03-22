@@ -496,6 +496,15 @@ pub async fn release_tickets_for_game(pool: &AnyPool, game_pk: i64, user_id: i64
         .bind(user_id)
         .execute(pool)
         .await?;
+    let withdraw_sql = pg(
+        "UPDATE ticket_requests SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP \
+         WHERE game_pk = ? AND user_id = ? AND status IN ('pending', 'approved')",
+    );
+    sqlx::query(&withdraw_sql)
+        .bind(game_pk)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected())
 }
 
