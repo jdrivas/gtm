@@ -274,16 +274,18 @@ export default function MyRequests() {
           <h2 className="text-xl font-bold">My Requests</h2>
         </div>
         {requests.length > 0 && (
-          <div className="mb-4 text-xs text-gray-400 space-y-0.5">
+          <div className="mb-4 text-xs text-gray-400 grid grid-cols-[auto_1fr] gap-x-1 gap-y-0.5">
+            <span className="text-right">Games:</span>
             <div className="flex gap-4">
-              <span>Games: <span className="text-green-400 font-medium">{gamesAllocated} allocated</span></span>
-              <span><span className="text-yellow-400 font-medium">{gamesPending} pending</span></span>
-              <span><span className="text-gray-300 font-medium">{gamesRequested} total</span></span>
+              <span className="text-green-400 font-medium">{gamesAllocated} allocated</span>
+              <span className="text-yellow-400 font-medium">{gamesPending} pending</span>
+              <span className="text-gray-300 font-medium">{gamesRequested} total</span>
             </div>
+            <span className="text-right">Seats:</span>
             <div className="flex gap-4">
-              <span>Seats: <span className="text-green-400 font-medium">{seatsAllocated} allocated</span></span>
-              <span><span className="text-yellow-400 font-medium">{seatsPending} pending</span></span>
-              <span><span className="text-gray-300 font-medium">{seatsRequested} total</span></span>
+              <span className="text-green-400 font-medium">{seatsAllocated} allocated</span>
+              <span className="text-yellow-400 font-medium">{seatsPending} pending</span>
+              <span className="text-gray-300 font-medium">{seatsRequested} total</span>
             </div>
           </div>
         )}
