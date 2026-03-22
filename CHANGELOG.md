@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.3.1] — 2026-03-21
+
+### Changed
+- Move filter toggles to a separate row below "Request Tickets" title with smaller font and vertical dividers
+
+### Fixed
+- Fix race condition: coerce integer tag values to booleans on load to prevent cross-browser sync issues
+
 ## [v0.3.0] — 2026-03-21
 
 ### Added
