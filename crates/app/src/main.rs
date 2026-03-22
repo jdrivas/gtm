@@ -774,6 +774,38 @@ async fn api_my_games_release(
     Ok(Json(json!({ "status": "ok", "released": count })))
 }
 
+// --- Member: My Game Tags ---
+
+async fn api_my_game_tags(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+) -> Result<Json<Vec<gtm_models::GameTag>>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    gtm_db::list_game_tags_for_user(&pool, user.id)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+#[derive(Deserialize)]
+struct GameTagBody {
+    shortlist: bool,
+    cant_go: bool,
+}
+
+async fn api_my_game_tags_put(
+    auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Path(game_pk): Path<i64>,
+    Json(body): Json<GameTagBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let user = resolve_user(&auth_user, &pool).await?;
+    gtm_db::upsert_game_tag(&pool, user.id, game_pk, body.shortlist, body.cant_go)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(json!({ "status": "ok" })))
+}
+
 // --- Admin: Allocation ---
 
 #[derive(Serialize)]
@@ -1239,6 +1271,9 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         // Member: my games (allocated tickets)
         .route("/my/games", get(api_my_games))
         .route("/my/games/{game_pk}/release", post(api_my_games_release))
+        // Member: game tags (shortlist / can't go)
+        .route("/my/game-tags", get(api_my_game_tags))
+        .route("/my/game-tags/{game_pk}", axum::routing::put(api_my_game_tags_put))
         // Admin: allocation
         .route("/admin/allocation", get(api_admin_allocation))
         .route(

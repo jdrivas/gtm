@@ -185,3 +185,11 @@ pub struct TicketRequest {
     pub status: String,
     pub notes: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GameTag {
+    pub user_id: i64,
+    pub game_pk: i64,
+    pub shortlist: i64,
+    pub cant_go: i64,
+}

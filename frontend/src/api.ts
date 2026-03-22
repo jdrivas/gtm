@@ -1,4 +1,4 @@
-import type { Game, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, UserAllocationSection, MeResponse } from './types';
+import type { Game, GameTag, GameTicketDetail, Promotion, Seat, TicketSummary, TicketRequest, AllocationSummaryRow, GameAllocationDetail, UserAllocationSection, MeResponse } from './types';
 
 // --- Auth-aware fetch ---
 
@@ -218,4 +218,24 @@ export async function scrapeSchedule(season?: number): Promise<{ games: number; 
     throw new Error(text || res.statusText);
   }
   return res.json();
+}
+
+// --- Game Tags ---
+
+export async function fetchMyGameTags(): Promise<GameTag[]> {
+  const res = await authFetch('/api/my/game-tags');
+  if (!res.ok) throw new Error(`Failed to fetch game tags: ${res.statusText}`);
+  return res.json();
+}
+
+export async function setGameTag(gamePk: number, shortlist: boolean, cantGo: boolean): Promise<void> {
+  const res = await authFetch(`/api/my/game-tags/${gamePk}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shortlist, cant_go: cantGo }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
 }
