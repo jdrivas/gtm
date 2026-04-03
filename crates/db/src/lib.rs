@@ -380,7 +380,7 @@ pub async fn create_ticket_request(
             notes = excluded.notes, \
             status = CASE WHEN ticket_requests.status = 'withdrawn' THEN 'pending' ELSE ticket_requests.status END, \
             updated_at = CURRENT_TIMESTAMP \
-         RETURNING id, user_id, game_pk, seats_requested, seats_approved, status, notes",
+         RETURNING id, user_id, game_pk, seats_requested, status, notes",
     );
     let req = sqlx::query_as::<_, TicketRequest>(&sql)
         .bind(user_id)
@@ -394,7 +394,7 @@ pub async fn create_ticket_request(
 
 pub async fn list_requests_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<TicketRequest>> {
     let sql = pg(
-        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+        "SELECT id, user_id, game_pk, seats_requested, status, notes \
          FROM ticket_requests WHERE user_id = ? ORDER BY game_pk",
     );
     let reqs = sqlx::query_as::<_, TicketRequest>(&sql)
@@ -406,7 +406,7 @@ pub async fn list_requests_for_user(pool: &AnyPool, user_id: i64) -> Result<Vec<
 
 pub async fn list_requests_for_game(pool: &AnyPool, game_pk: i64) -> Result<Vec<TicketRequest>> {
     let sql = pg(
-        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+        "SELECT id, user_id, game_pk, seats_requested, status, notes \
          FROM ticket_requests WHERE game_pk = ? ORDER BY created_at",
     );
     let reqs = sqlx::query_as::<_, TicketRequest>(&sql)
@@ -418,7 +418,7 @@ pub async fn list_requests_for_game(pool: &AnyPool, game_pk: i64) -> Result<Vec<
 
 pub async fn list_all_pending_requests(pool: &AnyPool) -> Result<Vec<TicketRequest>> {
     let reqs = sqlx::query_as::<_, TicketRequest>(
-        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+        "SELECT id, user_id, game_pk, seats_requested, status, notes \
          FROM ticket_requests WHERE status = 'pending' ORDER BY game_pk, created_at",
     )
     .fetch_all(pool)
@@ -511,15 +511,13 @@ pub async fn release_tickets_for_game(pool: &AnyPool, game_pk: i64, user_id: i64
 pub async fn update_request_approval(
     pool: &AnyPool,
     request_id: i64,
-    seats_approved: i64,
     status: &str,
 ) -> Result<bool> {
     let sql = pg(
-        "UPDATE ticket_requests SET seats_approved = seats_approved + ?, status = ?, updated_at = CURRENT_TIMESTAMP \
+        "UPDATE ticket_requests SET status = ?, updated_at = CURRENT_TIMESTAMP \
          WHERE id = ?",
     );
     let result = sqlx::query(&sql)
-        .bind(seats_approved)
         .bind(status)
         .bind(request_id)
         .execute(pool)
@@ -530,7 +528,7 @@ pub async fn update_request_approval(
 /// All non-withdrawn/declined requests (pending + approved), ordered by user then game.
 pub async fn list_all_active_requests(pool: &AnyPool) -> Result<Vec<TicketRequest>> {
     let reqs = sqlx::query_as::<_, TicketRequest>(
-        "SELECT id, user_id, game_pk, seats_requested, seats_approved, status, notes \
+        "SELECT id, user_id, game_pk, seats_requested, status, notes \
          FROM ticket_requests WHERE status IN ('pending', 'approved') ORDER BY user_id, game_pk",
     )
     .fetch_all(pool)

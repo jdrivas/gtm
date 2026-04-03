@@ -109,7 +109,7 @@ async fn release_tickets_also_withdraws_request() {
         .unwrap();
 
     // Approve the request
-    gtm_db::update_request_approval(&pool, req.id, 1, "approved")
+    gtm_db::update_request_approval(&pool, req.id, "approved")
         .await
         .unwrap();
 

@@ -94,7 +94,6 @@ Roles are **not stored** in the database — they come from the JWT access token
 | user_id | `i64` | FK → users, UNIQUE(user_id, game_pk) |
 | game_pk | `i64` | FK → games |
 | seats_requested | `i64` | |
-| seats_approved | `i64` | default 0 |
 | status | `String` | `pending`, `approved`, or `withdrawn` |
 | notes | `Option<String>` | |
 
