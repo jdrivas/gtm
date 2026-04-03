@@ -978,8 +978,7 @@ async fn api_admin_allocate(
     require_admin(&auth_user)?;
 
     let mut assigned_count = 0u64;
-    let mut approved_requests: std::collections::HashSet<i64> =
-        std::collections::HashSet::new();
+    let mut approved_requests: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
     for a in &body.assignments {
         let ok = gtm_db::assign_ticket(&pool, a.game_ticket_id, a.user_id)
