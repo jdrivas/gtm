@@ -11,7 +11,7 @@ static IS_POSTGRES: OnceLock<bool> = OnceLock::new();
 
 /// Translate `?` placeholders to `$1, $2, ...` when connected to Postgres.
 /// SQLite uses `?` natively; Postgres requires numbered `$N` parameters.
-fn pg(sql: &str) -> String {
+pub fn pg(sql: &str) -> String {
     if !*IS_POSTGRES.get().unwrap_or(&false) {
         return sql.to_string();
     }

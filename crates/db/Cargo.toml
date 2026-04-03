@@ -9,3 +9,6 @@ serde = { workspace = true }
 anyhow = { workspace = true }
 sqlx = { version = "0.8", features = ["runtime-tokio", "any", "sqlite", "postgres", "migrate", "tls-native-tls"] }
 tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
