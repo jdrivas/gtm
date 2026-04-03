@@ -181,7 +181,6 @@ pub struct TicketRequest {
     pub user_id: i64,
     pub game_pk: i64,
     pub seats_requested: i64,
-    pub seats_approved: i64,
     pub status: String,
     pub notes: Option<String>,
 }

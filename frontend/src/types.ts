@@ -60,7 +60,6 @@ export interface TicketRequest {
   user_id: number;
   game_pk: number;
   seats_requested: number;
-  seats_approved: number;
   status: string;
   notes: string | null;
 }
@@ -92,7 +91,6 @@ export interface RequestWithUser {
   user_id: number;
   user_name: string;
   seats_requested: number;
-  seats_approved: number;
   status: string;
   notes: string | null;
 }
@@ -132,7 +130,6 @@ export interface UserAllocationEntry {
   away_team_name: string;
   day_night: string | null;
   seats_requested: number;
-  seats_approved: number;
   status: string;
   notes: string | null;
   game_total_seats: number;

@@ -888,7 +888,6 @@ struct RequestWithUser {
     user_id: i64,
     user_name: String,
     seats_requested: i64,
-    seats_approved: i64,
     status: String,
     notes: Option<String>,
 }
@@ -946,7 +945,6 @@ async fn api_admin_allocation_game(
                 .map(|u| u.name.clone())
                 .unwrap_or_default(),
             seats_requested: r.seats_requested,
-            seats_approved: r.seats_approved,
             status: r.status,
             notes: r.notes,
         })
@@ -980,9 +978,7 @@ async fn api_admin_allocate(
     require_admin(&auth_user)?;
 
     let mut assigned_count = 0u64;
-    // Track seats approved per request so we can update them
-    let mut request_approvals: std::collections::HashMap<i64, i64> =
-        std::collections::HashMap::new();
+    let mut approved_requests: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
     for a in &body.assignments {
         let ok = gtm_db::assign_ticket(&pool, a.game_ticket_id, a.user_id)
@@ -991,14 +987,14 @@ async fn api_admin_allocate(
         if ok {
             assigned_count += 1;
             if let Some(rid) = a.request_id {
-                *request_approvals.entry(rid).or_insert(0) += 1;
+                approved_requests.insert(rid);
             }
         }
     }
 
-    // Update request approval counts
-    for (request_id, seats) in &request_approvals {
-        gtm_db::update_request_approval(&pool, *request_id, *seats, "approved")
+    // Update request statuses to approved
+    for request_id in &approved_requests {
+        gtm_db::update_request_approval(&pool, *request_id, "approved")
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
@@ -1059,7 +1055,6 @@ struct UserAllocationEntry {
     away_team_name: String,
     day_night: Option<String>,
     seats_requested: i64,
-    seats_approved: i64,
     status: String,
     notes: Option<String>,
     game_total_seats: i64,
@@ -1152,7 +1147,6 @@ async fn api_admin_allocation_by_users(
                         away_team_name: game.map(|g| g.away_team_name.clone()).unwrap_or_default(),
                         day_night: game.and_then(|g| g.day_night.clone()),
                         seats_requested: r.seats_requested,
-                        seats_approved: r.seats_approved,
                         status: r.status.clone(),
                         notes: r.notes.clone(),
                         game_total_seats: total_seats,

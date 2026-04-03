@@ -24,6 +24,12 @@ function formatDate(d: string) {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function formatTime(game: Game): string {
+  if (game.start_time_tbd) return 'TBD';
+  const d = new Date(game.game_date);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
 export default function MyRequests() {
   const { isAuthenticated } = useAuth0();
   const [requests, setRequests] = useState<TicketRequest[]>([]);
@@ -358,7 +364,7 @@ export default function MyRequests() {
                             return (
                               <span className="inline-flex items-center gap-1 text-emerald-300 text-xs font-medium">
                                 <Check className="w-3 h-3" />
-                                {r.seats_approved || r.seats_requested}
+                                {r.seats_requested}
                               </span>
                             );
                           }
@@ -566,7 +572,10 @@ export default function MyRequests() {
                             className="rounded border-gray-600 bg-gray-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer"
                           />
                         </td>
-                        <td className="py-2 px-3 whitespace-nowrap font-medium">{formatDate(g.official_date)}</td>
+                        <td className="py-2 px-3 whitespace-nowrap font-medium">
+                          {formatDate(g.official_date)}
+                          <span className="text-gray-500 text-xs ml-1">{formatTime(g)}</span>
+                        </td>
                         <td className={`py-2 px-3${isCantGo ? ' line-through' : ''}`}>{g.away_team_name}</td>
                         <td className="py-2 px-3 text-center">
                           {g.day_night === 'night' ? (
