@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.3.3] — 2026-04-03
+
+### Changed
+- Remove redundant `seats_approved` column from `ticket_requests` table (actual ticket assignments are the source of truth)
+- Show game time in the Date column of the Request Tickets table
+
 ## [v0.3.2] — 2026-03-21
 
 ### Fixed
