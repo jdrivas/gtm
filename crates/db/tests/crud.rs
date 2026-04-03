@@ -80,9 +80,7 @@ async fn get_user_by_sub() {
     assert!(found.is_some());
     assert_eq!(found.unwrap().name, "Bob");
 
-    let missing = gtm_db::get_user_by_sub(&pool, "auth0|nope")
-        .await
-        .unwrap();
+    let missing = gtm_db::get_user_by_sub(&pool, "auth0|nope").await.unwrap();
     assert!(missing.is_none());
 }
 

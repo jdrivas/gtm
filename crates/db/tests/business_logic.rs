@@ -61,9 +61,7 @@ async fn generate_and_assign_tickets() {
     assert_eq!(count, 1); // one home game
 
     // List tickets for game
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500002)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500002).await.unwrap();
     assert_eq!(tickets.len(), 1);
     assert_eq!(tickets[0].status, "available");
     assert!(tickets[0].assigned_to.is_none());
@@ -75,16 +73,12 @@ async fn generate_and_assign_tickets() {
     assert!(ok);
 
     // Verify assigned
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500002)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500002).await.unwrap();
     assert_eq!(tickets[0].status, "assigned");
     assert_eq!(tickets[0].assigned_to, Some(user.id));
 
     // User's tickets
-    let my_tickets = gtm_db::list_tickets_for_user(&pool, user.id)
-        .await
-        .unwrap();
+    let my_tickets = gtm_db::list_tickets_for_user(&pool, user.id).await.unwrap();
     assert_eq!(my_tickets.len(), 1);
 }
 
@@ -109,9 +103,7 @@ async fn release_tickets_also_withdraws_request() {
     gtm_db::generate_tickets_for_seat(&pool, seat.id)
         .await
         .unwrap();
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500003)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500003).await.unwrap();
     gtm_db::assign_ticket(&pool, tickets[0].id, user.id)
         .await
         .unwrap();
@@ -128,9 +120,7 @@ async fn release_tickets_also_withdraws_request() {
     assert_eq!(released, 1);
 
     // Ticket is available again
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500003)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500003).await.unwrap();
     assert_eq!(tickets[0].status, "available");
     assert!(tickets[0].assigned_to.is_none());
 
@@ -158,9 +148,7 @@ async fn revoke_ticket_makes_available() {
     gtm_db::generate_tickets_for_seat(&pool, seat.id)
         .await
         .unwrap();
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500004)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500004).await.unwrap();
     gtm_db::assign_ticket(&pool, tickets[0].id, user.id)
         .await
         .unwrap();
@@ -168,9 +156,7 @@ async fn revoke_ticket_makes_available() {
     let ok = gtm_db::revoke_ticket(&pool, tickets[0].id).await.unwrap();
     assert!(ok);
 
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500004)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500004).await.unwrap();
     assert_eq!(tickets[0].status, "available");
     assert!(tickets[0].assigned_to.is_none());
 }
@@ -206,9 +192,7 @@ async fn allocation_summary_counts() {
         .unwrap();
 
     // Assign one ticket
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500005)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500005).await.unwrap();
     gtm_db::assign_ticket(&pool, tickets[0].id, user.id)
         .await
         .unwrap();
@@ -259,13 +243,9 @@ async fn generate_tickets_for_all_seats() {
         .await
         .unwrap();
 
-    let count = gtm_db::generate_tickets_for_all_seats(&pool)
-        .await
-        .unwrap();
+    let count = gtm_db::generate_tickets_for_all_seats(&pool).await.unwrap();
     assert_eq!(count, 2); // 1 game × 2 seats
 
-    let tickets = gtm_db::list_tickets_for_game(&pool, 500007)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 500007).await.unwrap();
     assert_eq!(tickets.len(), 2);
 }

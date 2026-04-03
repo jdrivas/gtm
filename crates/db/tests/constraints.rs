@@ -33,9 +33,7 @@ async fn assign_already_assigned_returns_false() {
     gtm_db::generate_tickets_for_seat(&pool, seat.id)
         .await
         .unwrap();
-    let tickets = gtm_db::list_tickets_for_game(&pool, 600001)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 600001).await.unwrap();
 
     // First assign succeeds
     let ok = gtm_db::assign_ticket(&pool, tickets[0].id, user1.id)
@@ -92,9 +90,7 @@ async fn revoke_available_ticket_returns_false() {
     gtm_db::generate_tickets_for_seat(&pool, seat.id)
         .await
         .unwrap();
-    let tickets = gtm_db::list_tickets_for_game(&pool, 600003)
-        .await
-        .unwrap();
+    let tickets = gtm_db::list_tickets_for_game(&pool, 600003).await.unwrap();
 
     // Ticket is available, not assigned — revoke should return false
     let ok = gtm_db::revoke_ticket(&pool, tickets[0].id).await.unwrap();
