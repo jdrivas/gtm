@@ -4,7 +4,8 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path, Query, State},
     routing::{delete, get, patch, post},
 };
-use chrono::{Datelike, Local};
+use chrono::{Datelike, Local, Utc};
+use chrono_tz::US::Pacific;
 use clap::{Parser, Subcommand, ValueEnum};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::{Deserialize, Serialize};
@@ -586,38 +587,38 @@ struct ScrapeScheduleResponse {
     tickets: usize,
 }
 
-async fn api_scrape_schedule(
-    _auth_user: AuthUser,
-    State(pool): State<AnyPool>,
-    Json(body): Json<ScrapeScheduleRequest>,
-) -> Result<Json<ScrapeScheduleResponse>, (StatusCode, String)> {
-    let season = body.season.unwrap_or(chrono::Local::now().year() as u32);
-    let data = gtm_scraper::fetch_schedule(season)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+/// Shared scrape logic: fetch schedule from MLB API, upsert games/promotions, generate tickets.
+async fn run_scrape(pool: &AnyPool, season: u32) -> anyhow::Result<(usize, usize, u64)> {
+    let data = gtm_scraper::fetch_schedule(season).await?;
     for game in &data.games {
-        gtm_db::upsert_game(&pool, game)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        gtm_db::upsert_game(pool, game).await?;
     }
     for promo in &data.promotions {
-        gtm_db::upsert_promotion(&pool, promo)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        gtm_db::upsert_promotion(pool, promo).await?;
     }
-    let ticket_count = gtm_db::generate_tickets_for_all_seats(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let ticket_count = gtm_db::generate_tickets_for_all_seats(pool).await?;
     info!(
         "{} games, {} promotions upserted, {} tickets generated",
         data.games.len(),
         data.promotions.len(),
         ticket_count
     );
+    Ok((data.games.len(), data.promotions.len(), ticket_count))
+}
+
+async fn api_scrape_schedule(
+    _auth_user: AuthUser,
+    State(pool): State<AnyPool>,
+    Json(body): Json<ScrapeScheduleRequest>,
+) -> Result<Json<ScrapeScheduleResponse>, (StatusCode, String)> {
+    let season = body.season.unwrap_or(chrono::Local::now().year() as u32);
+    let (games, promotions, tickets) = run_scrape(&pool, season)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(ScrapeScheduleResponse {
-        games: data.games.len(),
-        promotions: data.promotions.len(),
-        tickets: ticket_count as usize,
+        games,
+        promotions,
+        tickets: tickets as usize,
     }))
 }
 
@@ -1236,6 +1237,8 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
         spa_html,
     };
 
+    let scrape_pool = state.pool.clone();
+
     let cors = CorsLayer::permissive();
 
     let api_routes = Router::new()
@@ -1302,6 +1305,45 @@ async fn run_server(port: u16, pool: AnyPool, config: &gtm_config::Config) -> an
     let addr = format!("0.0.0.0:{port}");
     info!("Listening on http://{addr}");
 
+    // Spawn nightly scrape task (12:15 AM Pacific)
+    tokio::spawn(async move {
+        loop {
+            let now = Utc::now().with_timezone(&Pacific);
+            let tonight = now.date_naive().and_hms_opt(0, 15, 0).unwrap();
+            let target = if now.time() < tonight.time() {
+                now.date_naive()
+            } else {
+                now.date_naive() + chrono::Duration::days(1)
+            };
+            let target_dt = target
+                .and_hms_opt(0, 15, 0)
+                .unwrap()
+                .and_local_timezone(Pacific)
+                .unwrap();
+            let delay = (target_dt - now)
+                .to_std()
+                .unwrap_or(std::time::Duration::from_secs(60));
+            info!(
+                "Nightly scrape scheduled in {:.1} hours",
+                delay.as_secs_f64() / 3600.0
+            );
+            tokio::time::sleep(delay).await;
+
+            let season = Utc::now().with_timezone(&Pacific).year() as u32;
+            info!("Starting nightly scrape for {season} season");
+            match run_scrape(&scrape_pool, season).await {
+                Ok((games, promos, tickets)) => {
+                    info!(
+                        "Nightly scrape complete: {games} games, {promos} promotions, {tickets} tickets"
+                    );
+                }
+                Err(e) => {
+                    warn!("Nightly scrape failed: {e}");
+                }
+            }
+        }
+    });
+
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
@@ -1358,22 +1400,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::ScrapeSchedule { season } => {
             let db = pool.as_ref().unwrap();
-            let data = gtm_scraper::fetch_schedule(season).await?;
-            for game in &data.games {
-                gtm_db::upsert_game(db, game).await?;
-            }
-            for promo in &data.promotions {
-                gtm_db::upsert_promotion(db, promo).await?;
-            }
-            info!(
-                "{} games, {} promotions upserted into database",
-                data.games.len(),
-                data.promotions.len()
-            );
-            let ticket_count = gtm_db::generate_tickets_for_all_seats(db).await?;
-            if ticket_count > 0 {
-                info!("{ticket_count} new game tickets generated for existing seats");
-            }
+            run_scrape(db, season).await?;
         }
         Commands::ListGames { month } => {
             let db = pool.as_ref().unwrap();

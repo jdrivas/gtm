@@ -85,9 +85,14 @@ function statusColor(status: string): string {
   }
 }
 
-function scoreDisplay(game: Game): string {
-  if (game.away_score === null && game.home_score === null) return '—';
-  return `${game.away_score ?? 0} - ${game.home_score ?? 0}`;
+function scoreDisplay(game: Game): { text: string; colorClass: string } {
+  if (game.away_score === null && game.home_score === null)
+    return { text: '—', colorClass: '' };
+  const text = `${game.away_score ?? 0} - ${game.home_score ?? 0}`;
+  if (game.status_abstract !== 'Final') return { text, colorClass: '' };
+  const isHome = game.home_team_name === GIANTS_TEAM_NAME;
+  const giantsWon = isHome ? game.home_is_winner : game.away_is_winner;
+  return { text, colorClass: giantsWon ? 'text-green-400' : 'text-red-400' };
 }
 
 interface Props {
@@ -169,6 +174,21 @@ export default function ScheduleTable({
     }
     loadAllPromos();
     return () => { cancelled = true; };
+  }, [games]);
+
+  const seasonStats = useMemo(() => {
+    let wins = 0;
+    let losses = 0;
+    let played = 0;
+    for (const g of games) {
+      if (g.status_abstract !== 'Final') continue;
+      played++;
+      const isHome = g.home_team_name === GIANTS_TEAM_NAME;
+      const giantsWon = isHome ? g.home_is_winner : g.away_is_winner;
+      if (giantsWon) wins++;
+      else losses++;
+    }
+    return { wins, losses, played, remaining: games.length - played };
   }, [games]);
 
   const monthNum = MONTH_NUMBERS[selectedMonth];
@@ -348,8 +368,14 @@ export default function ScheduleTable({
           </>
         )}
 
-        <div className="ml-auto text-sm text-gray-500">
-          {sorted.length} game{sorted.length !== 1 ? 's' : ''}
+        <div className="ml-auto flex items-center gap-3 text-sm text-gray-500">
+          <span><span className="text-green-400 font-medium">{seasonStats.wins}W</span>–<span className="text-red-400 font-medium">{seasonStats.losses}L</span></span>
+          <span className="text-gray-600">·</span>
+          <span>{seasonStats.played} played</span>
+          <span className="text-gray-600">·</span>
+          <span>{seasonStats.remaining} left</span>
+          <span className="text-gray-600">·</span>
+          <span>{sorted.length} shown</span>
         </div>
       </div>
 
@@ -497,8 +523,8 @@ function ScheduleRow({
           )}
         </td>
         <td className="px-3 py-2 font-medium whitespace-nowrap">{opponent}</td>
-        <td className="px-3 py-2 whitespace-nowrap tabular-nums">
-          {scoreDisplay(game)}
+        <td className={`px-3 py-2 whitespace-nowrap tabular-nums ${scoreDisplay(game).colorClass}`}>
+          {scoreDisplay(game).text}
         </td>
         <td
           className={`px-3 py-2 whitespace-nowrap ${statusColor(game.status_detailed)}`}
