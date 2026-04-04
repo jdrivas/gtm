@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.3.4] — 2026-04-04
+
+### Added
+- Season summary stats in Schedule page filter bar (W/L, played, remaining, shown)
+- Win/loss color highlighting on score column (green/red)
+- Nightly automatic schedule scrape at 12:15 AM Pacific
+
+### Changed
+- Extracted shared `run_scrape()` helper used by CLI, API, and nightly scheduler
+
 ## [v0.3.3] — 2026-04-03
 
 ### Changed
